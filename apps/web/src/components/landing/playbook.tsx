@@ -1,4 +1,4 @@
-import { ArrowRight, Star } from "lucide-react";
+import { ArrowDown, Quote, Star } from "lucide-react";
 
 const THUMBS = [
   { seed: "vts-thumb-1", label: "You're saving wrong" },
@@ -30,43 +30,56 @@ export function Playbook() {
           </p>
         </div>
 
-        <div className="mt-10 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-          <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-between">
-            <div className="w-full sm:max-w-[220px]">
+        <div className="relative mt-10 overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-10">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -top-28 -right-20 size-72 rounded-full bg-spark/10 blur-3xl"
+          />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -bottom-24 -left-20 size-72 rounded-full bg-riot/10 blur-3xl"
+          />
+
+          <div className="relative flex flex-col items-center">
+            <div className="w-full max-w-sm">
               <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
                 Your idea
               </span>
-              <div className="mt-2 rounded-2xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm text-foreground">
-                &quot;why most people fail at saving money&quot;
+              <div className="mt-2 flex items-start gap-2.5 rounded-2xl border border-border bg-muted/40 px-4 py-3.5 text-sm text-foreground shadow-sm">
+                <Quote className="mt-0.5 size-3.5 shrink-0 text-brand-muted" />
+                <span>why most people fail at saving money</span>
               </div>
             </div>
 
-            <ArrowRight className="hidden size-5 shrink-0 text-brand-muted sm:block" />
+            <span className="my-5 flex size-10 shrink-0 items-center justify-center rounded-2xl bg-spark/10 text-spark">
+              <ArrowDown className="size-4" />
+            </span>
 
-            <div className="w-full sm:max-w-[300px]">
+            <div className="w-full text-center">
               <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
                 Finished 7-slide slideshow
               </span>
-              <div className="mt-2 flex gap-2">
-                {THUMBS.map((thumb) => (
+              <div className="mt-5 flex flex-wrap justify-center gap-4 sm:gap-5">
+                {THUMBS.map((thumb, index) => (
                   <div
                     key={thumb.seed}
-                    className="relative aspect-9/16 flex-1 overflow-hidden rounded-2xl border border-border/70"
+                    className="group relative aspect-9/16 w-[130px] shrink-0 overflow-hidden rounded-2xl border border-border/70 shadow-lg transition-transform duration-200 hover:-translate-y-1.5 hover:rotate-0 sm:w-[172px]"
+                    style={{ transform: `rotate(${index % 2 === 0 ? -2 : 2}deg)` }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`https://picsum.photos/seed/${thumb.seed}/200/356`}
+                      src={`https://picsum.photos/seed/${thumb.seed}/400/711`}
                       alt=""
-                      className="size-full object-cover"
+                      className="size-full object-cover transition-transform duration-200 group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-void/35" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-void/80 via-void/10 to-transparent" />
                     {thumb.label ? (
-                      <span className="absolute inset-x-1 bottom-1 font-display text-[9px] leading-tight font-semibold text-white">
+                      <span className="absolute inset-x-3 bottom-3 font-display text-base leading-tight font-semibold text-white sm:text-lg">
                         {thumb.label}
                       </span>
                     ) : null}
                     {thumb.more ? (
-                      <div className="absolute inset-0 flex items-center justify-center bg-void/60 text-xs font-semibold text-white">
+                      <div className="absolute inset-0 flex items-center justify-center bg-void/70 text-2xl font-bold text-white backdrop-blur-[2px]">
                         +{thumb.more}
                       </div>
                     ) : null}
