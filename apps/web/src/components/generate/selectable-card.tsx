@@ -32,10 +32,10 @@ export function SelectableCard({
       onClick={onToggle}
       aria-pressed={selected}
       className={cn(
-        "relative flex h-full min-h-[168px] flex-col items-start justify-between gap-8 rounded-2xl border bg-card p-5 text-left transition-colors",
+        "relative flex h-full min-h-[168px] flex-col items-start justify-between gap-8 rounded-2xl border bg-card p-5 text-left transition-all duration-200 active:scale-[0.98]",
         selected
-          ? "border-riot ring-2 ring-riot/25"
-          : "border-border hover:border-brand-muted/60",
+          ? "border-riot shadow-sm ring-2 ring-riot/25"
+          : "border-border hover:-translate-y-0.5 hover:border-brand-muted/60 hover:shadow-sm",
       )}
     >
       {selected ? (
@@ -109,7 +109,7 @@ export function AddCustomCard({ onAdd }: { onAdd: (label: string) => void }) {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="flex h-full min-h-[168px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-muted-foreground transition-colors hover:border-brand-muted hover:text-foreground"
+      className="flex h-full min-h-[168px] flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-muted-foreground transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-muted hover:text-foreground active:scale-[0.98]"
     >
       <span className="flex size-9 items-center justify-center rounded-2xl bg-muted">
         <Plus className="size-4" />

@@ -17,7 +17,7 @@ export function StepShell({
   children: ReactNode;
 }) {
   return (
-    <div className="relative mx-auto w-full max-w-3xl">
+    <div className="animate-in fade-in-0 slide-in-from-bottom-4 relative mx-auto w-full max-w-3xl duration-500 ease-out">
       {typeof progress === "number" ? (
         <div className="mb-8 h-1 w-full overflow-hidden rounded-2xl bg-border">
           <div
