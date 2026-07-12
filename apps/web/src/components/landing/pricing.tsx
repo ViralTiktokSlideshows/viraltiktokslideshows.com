@@ -2,6 +2,8 @@ import Link from "next/link";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
+import { Reveal } from "@/components/reveal";
+
 const PLANS = [
   {
     name: "Creator",
@@ -30,17 +32,17 @@ export function Pricing() {
   return (
     <section id="pricing" className="px-4 py-16 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-5xl">
-        <div className="flex flex-col items-center text-center">
+        <Reveal className="flex flex-col items-center text-center">
           <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             Pricing
           </span>
           <h2 className="mt-3 font-display text-3xl font-bold text-foreground sm:text-4xl">
             Try it free. Unlock when you love it.
           </h2>
-        </div>
+        </Reveal>
 
         <div className="mt-10 grid gap-5 sm:grid-cols-2">
-          <div className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6">
+          <Reveal className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6">
             <div className="flex items-start justify-between gap-4">
               <h3 className="font-semibold text-foreground">Preview</h3>
               <span className="font-mono text-sm font-semibold text-muted-foreground">Free</span>
@@ -49,9 +51,12 @@ export function Pricing() {
               See your hook slide before paying a cent. If the hook doesn&apos;t stop{" "}
               <em>you</em> mid-scroll, don&apos;t buy it.
             </p>
-          </div>
+          </Reveal>
 
-          <div className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-void p-6">
+          <Reveal
+            delay={100}
+            className="relative flex flex-col justify-between overflow-hidden rounded-2xl bg-void p-6"
+          >
             <span className="absolute top-5 right-5 rounded-2xl bg-spark px-2.5 py-1 text-[10px] font-bold tracking-wide text-void uppercase">
               Start here
             </span>
@@ -69,7 +74,7 @@ export function Pricing() {
             >
               Generate my slideshow &mdash; free
             </Button>
-          </div>
+          </Reveal>
         </div>
 
         <p className="mt-8 text-center text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -77,9 +82,10 @@ export function Pricing() {
         </p>
 
         <div className="mt-6 grid gap-5 sm:grid-cols-3">
-          {PLANS.map((plan) => (
-            <div
+          {PLANS.map((plan, index) => (
+            <Reveal
               key={plan.name}
+              delay={index * 100}
               className={
                 plan.featured
                   ? "relative flex flex-col gap-4 rounded-2xl bg-void p-6 shadow-xl sm:-my-3 sm:py-9"
@@ -124,7 +130,7 @@ export function Pricing() {
                   {plan.note}
                 </p>
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>

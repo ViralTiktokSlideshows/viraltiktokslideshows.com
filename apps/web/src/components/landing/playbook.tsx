@@ -1,5 +1,7 @@
 import { ArrowDown, Quote, Star } from "lucide-react";
 
+import { Reveal } from "@/components/reveal";
+
 const THUMBS = [
   { seed: "vts-thumb-1", label: "You're saving wrong" },
   { seed: "vts-thumb-2", label: null },
@@ -16,7 +18,7 @@ export function Playbook() {
   return (
     <section className="px-4 py-16 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-5xl">
-        <div className="flex flex-col items-center text-center">
+        <Reveal className="flex flex-col items-center text-center">
           <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             The playbook
           </span>
@@ -28,9 +30,12 @@ export function Playbook() {
             structure, slide count, text placement, payoff timing. Every slideshow you generate
             follows that playbook automatically.
           </p>
-        </div>
+        </Reveal>
 
-        <div className="relative mt-10 overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-10">
+        <Reveal
+          delay={100}
+          className="relative mt-10 overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-10"
+        >
           <div
             aria-hidden
             className="pointer-events-none absolute -top-28 -right-20 size-72 rounded-full bg-spark/10 blur-3xl"
@@ -88,16 +93,17 @@ export function Playbook() {
               </div>
             </div>
           </div>
-        </div>
+        </Reveal>
 
         <div className="mt-5 grid gap-5 sm:grid-cols-3">
-          <div className="flex flex-col justify-center rounded-2xl bg-void px-6 py-8">
+          <Reveal className="flex flex-col justify-center rounded-2xl bg-void px-6 py-8">
             <span className="font-mono text-3xl font-bold text-spark">4,217</span>
             <span className="mt-1 text-sm text-bone/60">slideshows generated and counting</span>
-          </div>
-          {TESTIMONIALS.map((quote) => (
-            <div
+          </Reveal>
+          {TESTIMONIALS.map((quote, index) => (
+            <Reveal
               key={quote}
+              delay={(index + 1) * 100}
               className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6"
             >
               <div className="flex gap-0.5 text-spark">
@@ -107,7 +113,7 @@ export function Playbook() {
               </div>
               <p className="mt-3 text-sm text-foreground/80 italic">&ldquo;{quote}&rdquo;</p>
               <p className="mt-4 text-xs text-muted-foreground">@creator &middot; placeholder</p>
-            </div>
+            </Reveal>
           ))}
         </div>
       </div>

@@ -5,6 +5,8 @@ import { useState } from "react";
 
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
+import { Reveal } from "@/components/reveal";
+
 const FAQS: { q: string; a: React.ReactNode }[] = [
   {
     q: "Do I need to sign up to try it?",
@@ -44,20 +46,23 @@ export function Faq() {
   return (
     <section id="faq" className="px-4 py-16 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-2xl">
-        <div className="flex flex-col items-center text-center">
+        <Reveal className="flex flex-col items-center text-center">
           <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
             FAQ
           </span>
           <h2 className="mt-3 font-display text-3xl font-bold text-foreground sm:text-4xl">
             Questions, answered fast
           </h2>
-        </div>
+        </Reveal>
 
-        <div className="mt-10 flex flex-col gap-3">
+        <Reveal delay={100} className="mt-10 flex flex-col gap-3">
           {FAQS.map((item, index) => {
             const isOpen = openIndex === index;
             return (
-              <div key={item.q} className="rounded-2xl border border-border bg-card">
+              <div
+                key={item.q}
+                className="rounded-2xl border border-border bg-card transition-shadow duration-200 hover:shadow-sm"
+              >
                 <button
                   type="button"
                   onClick={() => setOpenIndex(isOpen ? null : index)}
@@ -67,20 +72,27 @@ export function Faq() {
                   <span className="text-sm font-semibold text-foreground">{item.q}</span>
                   <span
                     className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded-2xl",
+                      "flex size-5 shrink-0 items-center justify-center rounded-2xl transition-colors duration-200",
                       isOpen ? "bg-riot/10 text-riot" : "bg-muted text-muted-foreground",
                     )}
                   >
                     {isOpen ? <Minus className="size-3" /> : <Plus className="size-3" />}
                   </span>
                 </button>
-                {isOpen ? (
-                  <div className="px-5 pb-4 text-sm text-muted-foreground">{item.a}</div>
-                ) : null}
+                <div
+                  className={cn(
+                    "grid transition-all duration-300 ease-out",
+                    isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0",
+                  )}
+                >
+                  <div className="overflow-hidden">
+                    <p className="px-5 pb-4 text-sm text-muted-foreground">{item.a}</p>
+                  </div>
+                </div>
               </div>
             );
           })}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
