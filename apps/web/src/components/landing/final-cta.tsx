@@ -1,7 +1,10 @@
-import { ArrowRight, Music2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
+
+import { Reveal } from "@/components/reveal";
 
 const FOOTER_COLUMNS = [
   {
@@ -22,7 +25,7 @@ export function FinalCta() {
   return (
     <>
       <section className="px-4 pb-2 sm:px-6">
-        <div className="mx-auto max-w-5xl rounded-2xl bg-void px-6 py-14 text-center sm:py-16">
+        <Reveal className="mx-auto max-w-5xl rounded-2xl bg-void px-6 py-14 text-center sm:py-16">
           <h2 className="mx-auto max-w-2xl font-display text-3xl leading-[1.1] font-bold text-balance text-bone sm:text-4xl md:text-5xl">
             Your next viral post is one sentence away
           </h2>
@@ -41,12 +44,12 @@ export function FinalCta() {
           <p className="mt-4 text-xs text-bone/40">
             No signup &middot; No credit card &middot; See your first slide instantly
           </p>
-        </div>
+        </Reveal>
       </section>
 
       <footer className="overflow-hidden rounded-t-2xl bg-card px-4 pt-10 sm:px-6">
         <div className="mx-auto max-w-5xl">
-          <div className="grid gap-10 border-b border-border pb-10 sm:grid-cols-2 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
+          <Reveal className="grid gap-10 border-b border-border pb-10 sm:grid-cols-2 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
             <div>
               <Link href="/" className="flex items-center gap-2.5">
                 <span className="flex size-7 items-center justify-center rounded-2xl bg-void">
@@ -61,12 +64,20 @@ export function FinalCta() {
                 images in about 30 seconds.
               </p>
               <div className="mt-4 flex gap-2">
-                <span className="flex size-8 items-center justify-center rounded-2xl border border-border text-foreground">
-                  <Music2 className="size-3.5" />
-                </span>
-                <span className="flex size-8 items-center justify-center rounded-2xl border border-border text-xs font-semibold text-foreground">
-                  X
-                </span>
+                <a
+                  href="#"
+                  aria-label="TikTok"
+                  className="flex size-8 items-center justify-center rounded-2xl border border-border transition-colors hover:border-brand-muted"
+                >
+                  <Image src="/icons8-tiktok-48.png" alt="" width={16} height={16} />
+                </a>
+                <a
+                  href="#"
+                  aria-label="X"
+                  className="flex size-8 items-center justify-center rounded-2xl border border-border transition-colors hover:border-brand-muted"
+                >
+                  <Image src="/icons8-x-50.png" alt="" width={16} height={16} />
+                </a>
               </div>
             </div>
 
@@ -87,7 +98,7 @@ export function FinalCta() {
                 </ul>
               </div>
             ))}
-          </div>
+          </Reveal>
 
           <div className="flex flex-col-reverse items-center justify-between gap-4 py-6 sm:flex-row">
             <p className="text-xs text-muted-foreground">
