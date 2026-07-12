@@ -59,7 +59,7 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} ${clashDisplay.variable} antialiased`}
       >
         <Providers>
-          <div className="grid grid-rows-[auto_1fr] h-svh">
+          <div className="flex min-h-svh flex-col overflow-x-clip">
             <Header />
             {children}
           </div>
