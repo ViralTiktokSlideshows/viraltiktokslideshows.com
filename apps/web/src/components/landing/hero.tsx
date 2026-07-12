@@ -1,4 +1,8 @@
+"use client";
+
 import { ArrowUp } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { Textarea } from "@viraltiktokslideshows/ui/components/textarea";
@@ -6,6 +10,16 @@ import { Textarea } from "@viraltiktokslideshows/ui/components/textarea";
 import { SlideDeck } from "./slide-deck";
 
 export function Hero() {
+  const router = useRouter();
+  const [idea, setIdea] = useState("");
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = idea.trim();
+    if (!trimmed) return;
+    router.push(`/generate?idea=${encodeURIComponent(trimmed)}`);
+  }
+
   return (
     <section className="px-4 pt-14 pb-16 sm:px-6 sm:pt-20 sm:pb-20">
       <div className="mx-auto flex max-w-3xl flex-col items-center text-center">
@@ -30,15 +44,18 @@ export function Hero() {
           images. No Canva. No templates. No design skills.
         </p>
 
-        <form className="mt-9 w-full max-w-xl sm:mt-10">
+        <form className="mt-9 w-full max-w-xl sm:mt-10" onSubmit={handleSubmit}>
           <div className="relative rounded-2xl border border-border bg-card p-2 shadow-sm">
             <Textarea
+              value={idea}
+              onChange={(event) => setIdea(event.target.value)}
               placeholder='What&apos;s your slideshow about? e.g. "why most people fail at saving money"'
               className="min-h-[84px] resize-none border-0 bg-transparent p-3 pr-14 text-sm shadow-none focus-visible:ring-0 sm:text-base"
             />
             <Button
               type="submit"
               size="icon"
+              disabled={!idea.trim()}
               className="absolute right-4 bottom-4"
               aria-label="Generate slideshow"
             >
