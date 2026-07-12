@@ -62,7 +62,11 @@ export function Pricing() {
                 Unlock this slideshow. All slides, full quality, no watermark. Yours forever.
               </p>
             </div>
-            <Button className="mt-6 w-full" render={<Link href="/generate" />}>
+            <Button
+              className="mt-6 w-full"
+              nativeButton={false}
+              render={<Link href="/generate" />}
+            >
               Generate my slideshow &mdash; free
             </Button>
           </div>

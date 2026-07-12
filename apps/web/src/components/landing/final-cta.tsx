@@ -29,7 +29,12 @@ export function FinalCta() {
           <p className="mx-auto mt-4 max-w-md text-sm text-bone/60 sm:text-base">
             Type an idea, see your hook slide free, and unlock the full deck for $2.
           </p>
-          <Button size="lg" className="mt-8" render={<Link href="/generate" />}>
+          <Button
+            size="lg"
+            className="mt-8"
+            nativeButton={false}
+            render={<Link href="/generate" />}
+          >
             Generate my slideshow &mdash; free
             <ArrowRight className="size-4" data-icon="inline-end" />
           </Button>

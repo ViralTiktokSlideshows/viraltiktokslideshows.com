@@ -17,7 +17,7 @@ export default function Header() {
             <span className="size-2.5 rotate-45 rounded-[2px] bg-spark" />
           </span>
           <span className="font-display text-sm font-semibold tracking-tight text-foreground sm:text-base">
-            viraltiktokslideshows
+            Viral Tiktok Slideshows
           </span>
         </Link>
 
@@ -33,7 +33,12 @@ export default function Header() {
           ))}
         </nav>
 
-        <Button variant="secondary" size="sm" render={<Link href="/generate" />}>
+        <Button
+          variant="secondary"
+          size="sm"
+          nativeButton={false}
+          render={<Link href="/generate" />}
+        >
           Generate free
         </Button>
       </div>
