@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "scheme": "viraltiktokslideshows",
+    "userInterfaceStyle": "automatic",
+    "orientation": "default",
+    "web": {
+      "bundler": "metro"
+    },
+    "name": "viraltiktokslideshows",
+    "slug": "viraltiktokslideshows",
+    "plugins": ["expo-font"],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
