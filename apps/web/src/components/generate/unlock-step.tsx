@@ -1,6 +1,7 @@
 "use client";
 
 import { ArrowRight } from "lucide-react";
+import Image from "next/image";
 import { toast } from "sonner";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
@@ -39,6 +40,27 @@ export function UnlockStep({ data }: { data: GeneratedSlideshow }) {
         >
           Unlock for $2
           <ArrowRight className="size-4" data-icon="inline-end" />
+        </Button>
+
+        <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px w-8 bg-border" />
+          or subscribe
+          <span className="h-px w-8 bg-border" />
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="mt-3 gap-2.5"
+          onClick={() =>
+            toast("Google sign-in isn't wired up yet", {
+              description: "Account creation happens here once checkout ships.",
+            })
+          }
+        >
+          <Image src="/icons8-google-48.png" alt="" width={16} height={16} />
+          Continue with Google
         </Button>
       </div>
     </StepShell>
