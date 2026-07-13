@@ -4,9 +4,11 @@ import * as arctic from "arctic";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import JSZip from "jszip";
 import { Webhook } from "standardwebhooks";
 
 import { createUnlockCheckoutSession } from "./lib/dodo";
+import { fillRemainingSlideImages, generateSlideshow } from "./lib/generate-slideshow";
 import {
   clearOAuthStateCookie,
   decodeGoogleIdToken,
@@ -200,34 +202,43 @@ app.get("/", (c) => {
   return c.text("OK");
 });
 
-// Mock generation endpoint. Returns the same 7-slide slideshow every time —
-// stands in for the future Gemini + Ideogram pipeline described in the
-// product spec so the frontend flow can be built against a stable contract.
+// Real generation: slide text via OpenRouter (google/gemini-3.5-flash),
+// then a real background image for the hook slide only via Ideogram — see
+// lib/generate-slideshow.ts for why the rest of the images wait until
+// checkout. This is free to call and unauthenticated, so it's rate
+// limited per-IP; a genuine failure surfaces as a real error (the client's
+// GeneratingStep treats any non-2xx as a hard failure and shows the retry
+// screen) rather than silently degrading to mock data.
 app.post("/api/generate", async (c) => {
+  const ip = getClientIp(c);
+  if (isRateLimited(`generate:ip:${ip}`, 12, 1000 * 60 * 15)) {
+    return c.json({ error: "Too many requests. Try again in a few minutes." }, 429);
+  }
+
   const body = await c.req.json().catch(() => ({}));
-  const idea = typeof body?.idea === "string" ? body.idea : "";
+  const idea = typeof body?.idea === "string" ? body.idea.trim() : "";
   const formats = Array.isArray(body?.formats) ? body.formats : [];
   const vibes = Array.isArray(body?.vibes) ? body.vibes : [];
 
-  const slides = [
-    "Nobody tells you the first slide is the whole game",
-    "Everyone's fighting for the first half-second of attention",
-    "If slide one doesn't hook, slides 2-7 don't matter",
-    "The best hooks promise a payoff, not just curiosity",
-    "Structure beats cleverness: hook, tension, payoff",
-    "Save-worthy slides give people a reason to screenshot",
-    "Post it, then double down on what works",
-  ];
+  if (!idea) {
+    return c.json({ error: "An idea is required" }, 400);
+  }
 
-  return c.json({
-    id: "mock-slideshow-1",
-    idea,
-    formats,
-    vibes,
-    hook: slides[0],
-    slideCount: slides.length,
-    slides: slides.map((text, index) => ({ index: index + 1, text })),
-  });
+  try {
+    const generated = await generateSlideshow(idea);
+    return c.json({
+      id: crypto.randomUUID(),
+      idea,
+      formats,
+      vibes,
+      hook: generated.hook,
+      slideCount: generated.slideCount,
+      slides: generated.slides,
+    });
+  } catch (error) {
+    console.error("Slideshow generation failed", error);
+    return c.json({ error: "Could not generate a slideshow. Try again." }, 502);
+  }
 });
 
 // Starts a $2 unlock purchase for the slideshow the client just got back
@@ -268,6 +279,17 @@ app.post("/api/checkout/create", async (c) => {
     }
   }
 
+  // This is the moment someone actually commits to paying — worth
+  // spending Ideogram credits on the slides that were text-only during
+  // the free preview. Runs before the Purchase row is created so the
+  // stored slides snapshot already has every image, not just the hook.
+  let enrichedSlides = slides;
+  try {
+    enrichedSlides = await fillRemainingSlideImages(slides);
+  } catch (error) {
+    console.error("Failed to fill remaining slide images, continuing with what we have", error);
+  }
+
   let purchase: Awaited<ReturnType<typeof prisma.purchase.create>>;
   try {
     purchase = await prisma.purchase.create({
@@ -276,7 +298,7 @@ app.post("/api/checkout/create", async (c) => {
         idea,
         formats,
         vibes,
-        slides,
+        slides: enrichedSlides,
         idempotencyKey: idempotencyKey ?? undefined,
       },
     });
@@ -374,6 +396,64 @@ app.get("/api/purchases", async (c) => {
       status: p.status,
       createdAt: p.createdAt,
     })),
+  });
+});
+
+// Real slide download (#2 from the loose-ends list) — fetches each
+// slide's image server-side (avoids trusting the browser to read
+// cross-origin bytes from Ideogram's CDN) and zips them into one file.
+// Ownership-checked: only the user who unlocked this purchase can
+// download it. Ideogram's image URLs are ephemeral, so this can fail if
+// enough time has passed since checkout — see the note in lib/ideogram.ts.
+app.get("/api/purchases/:id/download", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+
+  const purchaseId = c.req.param("id");
+  const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+
+  if (!purchase || purchase.userId !== user.id) {
+    return c.json({ error: "Purchase not found" }, 404);
+  }
+  if (purchase.status !== "PAID") {
+    return c.json({ error: "This slideshow isn't unlocked" }, 403);
+  }
+
+  const slides = Array.isArray(purchase.slides)
+    ? (purchase.slides as { index: number; text: string; imageUrl?: string }[])
+    : [];
+  const withImages = slides.filter((slide) => slide.imageUrl);
+
+  if (withImages.length === 0) {
+    return c.json({ error: "No images are available for this slideshow yet" }, 404);
+  }
+
+  const zip = new JSZip();
+  const results = await Promise.allSettled(
+    withImages.map(async (slide) => {
+      const res = await fetch(slide.imageUrl as string);
+      if (!res.ok) throw new Error(`Failed to fetch slide ${slide.index} image`);
+      const buffer = await res.arrayBuffer();
+      zip.file(`slide-${String(slide.index).padStart(2, "0")}.png`, buffer);
+    }),
+  );
+
+  const allFailed = results.every((result) => result.status === "rejected");
+  if (allFailed) {
+    // Almost certainly the ephemeral Ideogram URLs expired.
+    return c.json(
+      { error: "These images have expired. Regenerate the slideshow to download it." },
+      410,
+    );
+  }
+
+  const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+
+  return c.body(zipBuffer, 200, {
+    "Content-Type": "application/zip",
+    "Content-Disposition": `attachment; filename="slideshow-${purchase.id}.zip"`,
   });
 });
 
