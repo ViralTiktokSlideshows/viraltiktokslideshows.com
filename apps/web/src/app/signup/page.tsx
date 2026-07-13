@@ -12,9 +12,14 @@ export const metadata: Metadata = {
   title: "Sign up — Viral Tiktok Slideshows",
 };
 
-const CALLBACK_URL = "/";
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ callbackURL?: string }>;
+}) {
+  const params = await searchParams;
+  const callbackURL = params.callbackURL || "/";
 
-export default function SignUpPage() {
   return (
     <AuthSplitShell
       leftPanel={
@@ -33,12 +38,12 @@ export default function SignUpPage() {
       <p className="mt-2 text-sm text-muted-foreground">Free to start — no card required.</p>
 
       <div className="mt-8 flex flex-col gap-4">
-        <GoogleAuthButton label="Continue with Google" callbackURL={CALLBACK_URL} />
+        <GoogleAuthButton label="Continue with Google" callbackURL={callbackURL} />
         <OrDivider />
         <MagicLinkForm
           buttonLabel="Send magic link"
           helperText="We'll email you a secure sign-in link — no password to remember."
-          callbackURL={CALLBACK_URL}
+          callbackURL={callbackURL}
         />
       </div>
 
