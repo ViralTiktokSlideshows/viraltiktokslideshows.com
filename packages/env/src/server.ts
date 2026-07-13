@@ -7,6 +7,31 @@ export const env = createEnv({
     DATABASE_URL: z.string().min(1),
     CORS_ORIGIN: z.url(),
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+
+    // This server's own base URL — used to build the Google OAuth
+    // redirect_uri (${SERVER_URL}/api/auth/google/callback) and the link
+    // embedded in magic-link emails. Not the web app's URL; that's
+    // CORS_ORIGIN above.
+    SERVER_URL: z.url(),
+
+    // Google OAuth, via the `arctic` client (arctic.Google) — see
+    // apps/server/src/lib/google-oauth.ts. Authorized redirect URI in the
+    // Google Cloud Console must match ${SERVER_URL}/api/auth/google/callback.
+    GOOGLE_CLIENT_ID: z.string().min(1),
+    GOOGLE_CLIENT_SECRET: z.string().min(1),
+
+    // Spacemail SMTP (magic link delivery via nodemailer)
+    SMTP_HOST: z.string().min(1).default("mail.spacemail.com"),
+    SMTP_PORT: z.coerce.number().default(465),
+    SMTP_USER: z.string().min(1),
+    SMTP_PASSWORD: z.string().min(1),
+    EMAIL_FROM: z.string().min(1).default("Viral TikTok Slideshows <noreply@viraltiktokslideshows.com>"),
+
+    // Dodo Payments (checkout + webhooks for the $2 unlock)
+    DODO_PAYMENTS_API_KEY: z.string().min(1),
+    DODO_PAYMENTS_WEBHOOK_KEY: z.string().min(1),
+    DODO_PAYMENTS_ENVIRONMENT: z.enum(["test_mode", "live_mode"]).default("test_mode"),
+    DODO_UNLOCK_PRODUCT_ID: z.string().min(1),
   },
   runtimeEnv: process.env,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
