@@ -10,6 +10,21 @@ import { sendMail } from "./mailer";
 // in the email and, briefly, in the verification URL the user clicks.
 const TOKEN_TTL_MS = 1000 * 60 * 15; // 15 minutes
 
+// DB-backed per-email throttle — persists across restarts/instances (unlike
+// an in-memory counter) since it just counts rows already being written to
+// Postgres for every send. Caps how many links one inbox can be sent inside
+// a rolling window, independent of who's asking for them.
+const MAX_SENDS_PER_WINDOW = 3;
+const RATE_LIMIT_WINDOW_MS = 1000 * 60 * 15; // 15 minutes
+
+export async function isMagicLinkRateLimited(email: string): Promise<boolean> {
+  const windowStart = new Date(Date.now() - RATE_LIMIT_WINDOW_MS);
+  const count = await prisma.magicLinkToken.count({
+    where: { email, createdAt: { gte: windowStart } },
+  });
+  return count >= MAX_SENDS_PER_WINDOW;
+}
+
 function generateToken(): string {
   return crypto.randomBytes(32).toString("base64url");
 }
