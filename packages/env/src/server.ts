@@ -32,6 +32,14 @@ export const env = createEnv({
     DODO_PAYMENTS_WEBHOOK_KEY: z.string().min(1),
     DODO_PAYMENTS_ENVIRONMENT: z.enum(["test_mode", "live_mode"]).default("test_mode"),
     DODO_UNLOCK_PRODUCT_ID: z.string().min(1),
+
+    // OpenRouter (slide text via google/gemini-3.5-flash) — see
+    // apps/server/src/lib/openrouter.ts.
+    OPENROUTER_API_KEY: z.string().min(1),
+
+    // Ideogram (slide background images, v4 generate endpoint) — see
+    // apps/server/src/lib/ideogram.ts.
+    IDEOGRAM_API_KEY: z.string().min(1),
   },
   runtimeEnv: process.env,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
