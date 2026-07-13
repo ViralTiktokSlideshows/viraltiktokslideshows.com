@@ -1,0 +1,293 @@
+openapi: 3.1.0
+info:
+  title: Hook Intelligence Service — Internal API
+  version: 0.1.0-draft
+  description: |
+    Internal-only backend that turns scraped TikTok slideshow data into
+    pattern data — hook text, structure classification, background-image
+    descriptions — consumed by three things: the main product's slideshow
+    generator, the Reddit content workflow, and the Astro blog build.
+
+    **Not user-facing.** Called server-to-server only. Nothing scraped is
+    ever served to end users as-is — no raw TikTok images, no verbatim
+    copied content. Only pattern data crosses the boundary.
+
+    **Status: documentation only.** This spec describes the intended
+    contract ahead of implementation. The scrape/enrich pipeline (TikHub,
+    Gemini 3.5 Flash, pg-boss jobs) is not built yet — none of these routes
+    are live. See `HANDOVER.md` in this folder for the full build spec.
+
+    **Auth:** every route requires the `x-internal-key` header. There is a
+    single static shared secret for now (no per-caller auth) — see the
+    `InternalKey` security scheme below.
+servers:
+  - url: http://localhost:4100
+    description: Local (once implemented) — no deployed environment yet.
+security:
+  - InternalKey: []
+tags:
+  - name: Scrape
+    description: Triggering and monitoring the TikHub scrape pipeline.
+  - name: Hooks
+    description: Enriched pattern data for prompting/content use.
+  - name: Reddit
+    description: Weekly digest aggregation for the Reddit content workflow.
+
+paths:
+  /internal/scrape/trigger:
+    post:
+      tags: [Scrape]
+      summary: Trigger a scrape run
+      description: >-
+        Queues `scrape:niche` pg-boss jobs. Omit `niche` in the body to
+        trigger every niche/hashtag pair configured in `NICHE_CONFIG`.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                niche:
+                  type: string
+                  description: Trigger only this niche. Omit to trigger all configured niches.
+                  example: fitness
+      responses:
+        "200":
+          description: Jobs queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [queued]
+                properties:
+                  queued:
+                    type: array
+                    items:
+                      type: string
+                    description: niche:hashtag identifiers queued for scraping.
+                    example: ["fitness:gymtok", "finance:moneytok"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /internal/scrape/status:
+    get:
+      tags: [Scrape]
+      summary: Scrape pipeline health, per niche
+      description: >-
+        Watch for niches returning `new_posts_last_run: 0` two runs in a
+        row — usually means the source hashtag has gone stale, not that
+        the niche is exhausted.
+      parameters:
+        - name: niche
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Limit to a single niche. Omit to return status for every configured niche.
+      responses:
+        "200":
+          description: Status per niche.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScrapeStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /internal/hooks:
+    get:
+      tags: [Hooks]
+      summary: Ranked hook examples
+      description: >-
+        Ranked by `engagement_score` descending. Used by the generation
+        service to build few-shot examples for the Gemini prompt, and
+        reused by the Astro blog build with a higher `limit` for post
+        content.
+      parameters:
+        - name: niche
+          in: query
+          required: false
+          schema:
+            type: string
+          example: fitness
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 20
+        - name: structure_tag
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/StructureTag"
+      responses:
+        "200":
+          description: Ranked hooks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Hook"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /internal/images:
+    get:
+      tags: [Hooks]
+      summary: Background image descriptions
+      description: >-
+        Feeds the image-sourcing step that builds Pexels/Unsplash search
+        queries from these text descriptions. Never returns original
+        TikTok image URLs — description text only.
+      parameters:
+        - name: niche
+          in: query
+          required: false
+          schema:
+            type: string
+          example: fitness
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 20
+      responses:
+        "200":
+          description: Image descriptions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ImageDescription"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /internal/reddit/digest:
+    post:
+      tags: [Reddit]
+      summary: Generate or fetch a weekly niche digest
+      description: >-
+        Backed by `reddit_digest_cache` via the `digest:generate` job — the
+        expensive aggregation runs once per niche/week, not on every call.
+        Structured enough to hand directly to a content-drafting step,
+        human or LLM.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [niche]
+              properties:
+                niche:
+                  type: string
+                  example: fitness
+                week_of:
+                  type: string
+                  format: date
+                  description: Defaults to the current week if omitted.
+      responses:
+        "200":
+          description: Weekly digest.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RedditDigest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+components:
+  securitySchemes:
+    InternalKey:
+      type: apiKey
+      in: header
+      name: x-internal-key
+      description: >-
+        Static shared secret, server-to-server only — no per-caller auth
+        yet. Every route on this service requires it.
+  responses:
+    Unauthorized:
+      description: Missing or incorrect x-internal-key header.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Unauthorized
+  schemas:
+    StructureTag:
+      type: string
+      enum: [question, bold_claim, nobody_tells_you, number_promise, other]
+    Hook:
+      type: object
+      properties:
+        hook_text:
+          type: string
+          example: Nobody tells you the first slide is the whole game
+        structure_tag:
+          $ref: "#/components/schemas/StructureTag"
+        engagement_score:
+          type: number
+          example: 842.3
+        niche:
+          type: string
+          example: fitness
+    ImageDescription:
+      type: object
+      properties:
+        image_description:
+          type: string
+          example: Close-up gym shot, dumbbells racked, warm gold hour lighting
+        niche:
+          type: string
+          example: fitness
+    ScrapeStatus:
+      type: object
+      properties:
+        niche:
+          type: string
+        last_scraped_at:
+          type: string
+          format: date-time
+          nullable: true
+        new_posts_last_run:
+          type: integer
+        total_posts:
+          type: integer
+        enrichment_pending_count:
+          type: integer
+    RedditDigest:
+      type: object
+      properties:
+        post_count:
+          type: integer
+        avg_engagement:
+          type: number
+        top_hooks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hook"
+        structure_tag_breakdown:
+          type: object
+          description: Count of posts per structure_tag for the niche/week.
+          additionalProperties:
+            type: integer
+          example:
+            question: 12
+            bold_claim: 8
+            nobody_tells_you: 5
+            number_promise: 3
+            other: 2
