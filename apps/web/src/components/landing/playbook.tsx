@@ -3,9 +3,9 @@ import { ArrowDown, Quote, Star } from "lucide-react";
 import { Reveal } from "@/components/reveal";
 
 const THUMBS = [
-  { seed: "vts-thumb-1", label: "You're saving wrong" },
-  { seed: "vts-thumb-2", label: null },
-  { seed: "vts-thumb-3", label: null },
+  { seed: "vts-thumb-1", label: "You're saving wrong", more: null },
+  { seed: "vts-thumb-2", label: null, more: null },
+  { seed: "vts-thumb-3", label: null, more: null },
   { seed: "vts-thumb-4", label: null, more: 4 },
 ] as const;
 
