@@ -1,64 +1,69 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import { FormatStep } from "./format-step";
-import { LoadingStep } from "./loading-step";
+import { GenerateShell } from "@/components/dashboard/generate-shell";
+
+import { ErrorStep } from "./error-step";
+import { GeneratingStep } from "./generating-step";
+import { IdeaStep } from "./idea-step";
 import { RevealStep } from "./reveal-step";
 import type { GeneratedSlideshow } from "./types";
 import { UnlockStep } from "./unlock-step";
-import { VibeStep } from "./vibe-step";
 
-type Step = "format" | "vibe" | "loading" | "reveal" | "unlock";
+type Step = "idea" | "generating" | "reveal" | "unlock" | "error";
 
+// Single-input flow: type an idea, generate, reveal the hook, unlock for
+// $2. No format/vibe picker steps anymore — the whole point of moving this
+// into the app shell was to make it as fast as the "type an idea, get a
+// slideshow" landing pitch actually promises.
 export function GenerateFlow() {
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const idea = searchParams.get("idea") ?? "";
+  const initialIdea = searchParams.get("idea") ?? "";
 
-  const [step, setStep] = useState<Step>("format");
-  const [formats, setFormats] = useState<string[]>([]);
-  const [vibes, setVibes] = useState<string[]>([]);
+  const [step, setStep] = useState<Step>("idea");
+  const [idea, setIdea] = useState(initialIdea);
   const [slideshow, setSlideshow] = useState<GeneratedSlideshow | null>(null);
 
   return (
-    <main className="px-4 py-14 sm:px-6 sm:py-20">
-      {step === "format" ? (
-        <FormatStep
-          selected={formats}
-          onChange={setFormats}
-          onBack={() => router.push("/")}
-          onNext={() => setStep("vibe")}
-        />
-      ) : null}
-
-      {step === "vibe" ? (
-        <VibeStep
-          selected={vibes}
-          onChange={setVibes}
-          onBack={() => setStep("format")}
-          onNext={() => setStep("loading")}
-        />
-      ) : null}
-
-      {step === "loading" ? (
-        <LoadingStep
-          idea={idea}
-          formats={formats}
-          vibes={vibes}
-          onComplete={(data) => {
-            setSlideshow(data);
-            setStep("reveal");
+    <GenerateShell>
+      {step === "idea" ? (
+        <IdeaStep
+          initialIdea={idea}
+          onSubmit={(value) => {
+            setIdea(value);
+            setStep("generating");
           }}
         />
       ) : null}
 
-      {step === "reveal" && slideshow ? (
-        <RevealStep data={slideshow} onNext={() => setStep("unlock")} />
+      {step === "generating" ? (
+        <GeneratingStep
+          idea={idea}
+          onComplete={(data) => {
+            setSlideshow(data);
+            setStep("reveal");
+          }}
+          onError={() => setStep("error")}
+        />
       ) : null}
 
-      {step === "unlock" && slideshow ? <UnlockStep data={slideshow} /> : null}
-    </main>
+      {step === "error" ? (
+        <ErrorStep onRetry={() => setStep("generating")} onEditIdea={() => setStep("idea")} />
+      ) : null}
+
+      {step === "reveal" && slideshow ? (
+        <div className="flex flex-1 flex-col px-4 py-12 sm:px-6 lg:py-16">
+          <RevealStep data={slideshow} onNext={() => setStep("unlock")} />
+        </div>
+      ) : null}
+
+      {step === "unlock" && slideshow ? (
+        <div className="flex flex-1 flex-col px-4 py-12 sm:px-6 lg:py-16">
+          <UnlockStep data={slideshow} />
+        </div>
+      ) : null}
+    </GenerateShell>
   );
 }
