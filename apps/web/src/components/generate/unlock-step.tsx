@@ -1,15 +1,46 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
-import Image from "next/image";
-import { toast } from "sonner";
+import { ArrowRight, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
+
+import { useSession } from "@/lib/auth-client";
+import { createCheckoutSession, savePendingSlideshow } from "@/lib/checkout-client";
 
 import { StepShell } from "./step-shell";
 import type { GeneratedSlideshow } from "./types";
 
+// Auth-conscious unlock CTA: signed-in users go straight to a Dodo checkout
+// session, signed-out users are handed off to /generate/checkout (the
+// "sign in and pay" screen) with this slideshow stashed for pickup once
+// they've signed in — see apps/web/src/lib/checkout-client.ts.
 export function UnlockStep({ data }: { data: GeneratedSlideshow }) {
+  const router = useRouter();
+  const { user, isPending } = useSession();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleUnlock() {
+    setError("");
+
+    if (!user) {
+      savePendingSlideshow(data);
+      router.push("/generate/checkout");
+      return;
+    }
+
+    setIsRedirecting(true);
+    try {
+      const { checkoutUrl } = await createCheckoutSession(data);
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      setIsRedirecting(false);
+      setError(err instanceof Error ? err.message : "Could not start checkout. Try again.");
+    }
+  }
+
   return (
     <StepShell>
       <div className="flex flex-col items-center py-6 text-center">
@@ -32,36 +63,29 @@ export function UnlockStep({ data }: { data: GeneratedSlideshow }) {
           type="button"
           size="lg"
           className="mt-6"
-          onClick={() =>
-            toast("Checkout isn't wired up yet", {
-              description: "DodoPayments integration is coming soon — hang tight.",
-            })
-          }
+          disabled={isPending || isRedirecting}
+          onClick={handleUnlock}
         >
-          Unlock for $2
-          <ArrowRight className="size-4" data-icon="inline-end" />
+          {isRedirecting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+              Redirecting to checkout
+            </>
+          ) : (
+            <>
+              Unlock for $2
+              <ArrowRight className="size-4" data-icon="inline-end" />
+            </>
+          )}
         </Button>
 
-        <div className="mt-4 flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px w-8 bg-border" />
-          or subscribe
-          <span className="h-px w-8 bg-border" />
-        </div>
+        {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="mt-3 gap-2.5"
-          onClick={() =>
-            toast("Google sign-in isn't wired up yet", {
-              description: "Account creation happens here once checkout ships.",
-            })
-          }
-        >
-          <Image src="/icons8-google-48.png" alt="" width={16} height={16} />
-          Continue with Google
-        </Button>
+        <p className="mt-4 text-xs text-muted-foreground">
+          {user
+            ? "You'll be redirected to a secure DodoPayments checkout."
+            : "Sign in on the next screen to unlock — it only takes a few seconds."}
+        </p>
       </div>
     </StepShell>
   );
