@@ -333,10 +333,47 @@ app.get("/api/checkout/status", async (c) => {
     return c.json({ error: "Purchase not found" }, 404);
   }
 
+  // Only enforce ownership when a session is present. /generate/success
+  // polls this right after the Dodo redirect lands (same browser, session
+  // cookie should already be there) — but if it's somehow missing, we still
+  // let the status through so that polling doesn't dead-end on an idle
+  // signed-out visitor. A mismatched *signed-in* user, though, never sees
+  // someone else's idea/slides.
+  const user = c.get("user");
+  if (user && purchase.userId !== user.id) {
+    return c.json({ error: "Purchase not found" }, 404);
+  }
+
   return c.json({
     status: purchase.status,
     idea: purchase.idea,
     slides: purchase.slides,
+  });
+});
+
+// Powers /dashboard: every purchase attempt (unlock click) the signed-in
+// user has made, newest first. "Attempt" because a row exists here the
+// moment /api/checkout/create runs — before Dodo has confirmed anything —
+// so PENDING/FAILED rows show up too, not just PAID ones.
+app.get("/api/purchases", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+
+  const purchases = await prisma.purchase.findMany({
+    where: { userId: user.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return c.json({
+    purchases: purchases.map((p) => ({
+      id: p.id,
+      idea: p.idea,
+      slides: p.slides,
+      status: p.status,
+      createdAt: p.createdAt,
+    })),
   });
 });
 
