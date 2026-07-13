@@ -21,6 +21,10 @@ export function UnlockStep({ data }: { data: GeneratedSlideshow }) {
   const { user, isPending } = useSession();
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState("");
+  // Stable for the lifetime of this mounted step — repeat clicks (double
+  // click, retry after an error) reuse the same key so the server dedupes
+  // them into a single Purchase instead of creating duplicates.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
 
   async function handleUnlock() {
     setError("");
@@ -33,7 +37,7 @@ export function UnlockStep({ data }: { data: GeneratedSlideshow }) {
 
     setIsRedirecting(true);
     try {
-      const { checkoutUrl } = await createCheckoutSession(data);
+      const { checkoutUrl } = await createCheckoutSession({ ...data, idempotencyKey });
       window.location.href = checkoutUrl;
     } catch (err) {
       setIsRedirecting(false);

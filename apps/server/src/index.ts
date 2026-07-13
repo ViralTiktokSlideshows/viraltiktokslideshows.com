@@ -14,7 +14,8 @@ import {
   readOAuthStateCookie,
   setOAuthStateCookie,
 } from "./lib/google-oauth";
-import { sendMagicLinkEmail, verifyMagicLinkToken } from "./lib/magic-link";
+import { isMagicLinkRateLimited, sendMagicLinkEmail, verifyMagicLinkToken } from "./lib/magic-link";
+import { getClientIp, isRateLimited } from "./lib/rate-limit";
 import {
   clearSessionCookie,
   createSession,
@@ -128,6 +129,20 @@ app.post("/api/auth/magic-link", async (c) => {
     return c.json({ error: "A valid email is required" }, 400);
   }
 
+  // Coarse per-IP throttle first (cheap, catches one client hammering many
+  // different emails), then the persistent per-email throttle (catches one
+  // inbox being spammed from anywhere). Both must pass.
+  const ip = getClientIp(c);
+  if (isRateLimited(`magic-link:ip:${ip}`, 10, 1000 * 60 * 15)) {
+    return c.json({ error: "Too many requests. Try again in a few minutes." }, 429);
+  }
+  if (await isMagicLinkRateLimited(email)) {
+    return c.json(
+      { error: "Too many sign-in links requested for this email. Try again in a few minutes." },
+      429,
+    );
+  }
+
   await sendMagicLinkEmail(email, callbackURL);
   return c.json({ success: true });
 });
@@ -233,16 +248,51 @@ app.post("/api/checkout/create", async (c) => {
   const formats = Array.isArray(body?.formats) ? body.formats : [];
   const vibes = Array.isArray(body?.vibes) ? body.vibes : [];
   const slides = Array.isArray(body?.slides) ? body.slides : [];
+  const idempotencyKey = typeof body?.idempotencyKey === "string" ? body.idempotencyKey : null;
 
-  const purchase = await prisma.purchase.create({
-    data: {
-      userId: user.id,
-      idea,
-      formats,
-      vibes,
-      slides,
-    },
-  });
+  // Same idempotencyKey means the same unlock attempt — a double-click, a
+  // retry, or a magic-link sign-in resuming this attempt on another device.
+  // Replay it instead of creating a second PENDING purchase / Dodo session.
+  if (idempotencyKey) {
+    const existing = await prisma.purchase.findUnique({ where: { idempotencyKey } });
+    if (existing && existing.userId === user.id) {
+      if (existing.status === "PAID") {
+        return c.json({
+          checkoutUrl: `${env.CORS_ORIGIN}/generate/success?purchase=${existing.id}`,
+          purchaseId: existing.id,
+        });
+      }
+      if (existing.checkoutUrl && existing.status === "PENDING") {
+        return c.json({ checkoutUrl: existing.checkoutUrl, purchaseId: existing.id });
+      }
+    }
+  }
+
+  let purchase: Awaited<ReturnType<typeof prisma.purchase.create>>;
+  try {
+    purchase = await prisma.purchase.create({
+      data: {
+        userId: user.id,
+        idea,
+        formats,
+        vibes,
+        slides,
+        idempotencyKey: idempotencyKey ?? undefined,
+      },
+    });
+  } catch (error) {
+    // Unique constraint race: two requests with the same idempotencyKey
+    // both passed the check above before either finished creating. Whoever
+    // lost just reads back what the winner created.
+    if (idempotencyKey) {
+      const existing = await prisma.purchase.findUnique({ where: { idempotencyKey } });
+      if (existing && existing.checkoutUrl) {
+        return c.json({ checkoutUrl: existing.checkoutUrl, purchaseId: existing.id });
+      }
+    }
+    console.error("Failed to create purchase", error);
+    return c.json({ error: "Could not start checkout" }, 502);
+  }
 
   try {
     const session = await createUnlockCheckoutSession({
@@ -253,12 +303,10 @@ app.post("/api/checkout/create", async (c) => {
     });
 
     const checkoutId = session.session_id ?? session.id ?? null;
-    if (checkoutId) {
-      await prisma.purchase.update({
-        where: { id: purchase.id },
-        data: { dodoCheckoutId: checkoutId },
-      });
-    }
+    await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { dodoCheckoutId: checkoutId ?? undefined, checkoutUrl: session.checkout_url },
+    });
 
     return c.json({ checkoutUrl: session.checkout_url, purchaseId: purchase.id });
   } catch (error) {
