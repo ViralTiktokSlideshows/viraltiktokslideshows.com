@@ -3,7 +3,6 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import localFont from "next/font/local";
 
 import "../index.css";
-import Header from "@/components/header";
 import Providers from "@/components/providers";
 
 const inter = Inter({
@@ -59,10 +58,7 @@ export default function RootLayout({
         className={`${inter.variable} ${jetbrainsMono.variable} ${clashDisplay.variable} antialiased`}
       >
         <Providers>
-          <div className="flex min-h-svh flex-col overflow-x-clip">
-            <Header />
-            {children}
-          </div>
+          <div className="flex min-h-svh flex-col overflow-x-clip">{children}</div>
         </Providers>
       </body>
     </html>
