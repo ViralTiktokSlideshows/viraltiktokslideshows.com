@@ -10,6 +10,7 @@ import { env } from "@viraltiktokslideshows/env/web";
 
 import { GenerateShell } from "@/components/dashboard/generate-shell";
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
+import { downloadPurchaseZip } from "@/lib/purchases-client";
 
 // Dodo Payments return_url destination (see apps/server/src/index.ts's
 // /api/checkout/create, which sets return_url to
@@ -20,7 +21,7 @@ import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-pre
 // to post" screen — the real unlocked slides, not a placeholder.
 
 type Status = "checking" | "paid" | "pending" | "failed" | "not_found";
-type Slide = { index: number; text: string };
+type Slide = { index: number; text: string; imageUrl?: string };
 
 const STOP_WORDS = new Set([
   "the",
@@ -59,6 +60,7 @@ function SuccessContent() {
   const [idea, setIdea] = useState("");
   const [slides, setSlides] = useState<Slide[]>([]);
   const [copied, setCopied] = useState(false);
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
 
   useEffect(() => {
     if (!purchaseId) {
@@ -108,6 +110,7 @@ function SuccessContent() {
 
   if (status === "paid" && slides.length > 0) {
     const { caption, hashtags } = buildCaption(idea, slides[0]?.text ?? "");
+    const hasAnyImage = slides.some((slide) => slide.imageUrl);
 
     async function handleCopyAll() {
       try {
@@ -117,6 +120,18 @@ function SuccessContent() {
       } catch {
         // Clipboard access can fail (permissions, insecure context) — not
         // worth surfacing an error for a copy-to-clipboard convenience.
+      }
+    }
+
+    async function handleDownload() {
+      if (!purchaseId) return;
+      setDownloadState("downloading");
+      try {
+        await downloadPurchaseZip(purchaseId);
+        setDownloadState("idle");
+      } catch (error) {
+        console.error(error);
+        setDownloadState("error");
       }
     }
 
@@ -145,22 +160,45 @@ function SuccessContent() {
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3">
-                {/* Real image export needs the actual generation pipeline (slides
-                    are text-only right now) — nothing to download yet. */}
                 <Button
                   size="lg"
                   className="gap-2"
-                  disabled
-                  title="Coming soon — slides are text-only until real image generation ships"
+                  onClick={handleDownload}
+                  disabled={!hasAnyImage || downloadState === "downloading"}
+                  title={
+                    hasAnyImage
+                      ? undefined
+                      : "No images generated for this slideshow yet — try regenerating it"
+                  }
                 >
-                  <Download className="size-4" data-icon="inline-start" />
+                  {downloadState === "downloading" ? (
+                    <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+                  ) : (
+                    <Download className="size-4" data-icon="inline-start" />
+                  )}
                   Download all {slides.length} slides
                 </Button>
-                <Button size="lg" variant="outline" className="gap-2" disabled title="Coming soon">
+                {/* Writing directly to a device's camera roll isn't something a
+                    web app can do — that needs a native app / share-sheet
+                    integration, not a browser API. Leaving this stubbed rather
+                    than faking it. */}
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="gap-2"
+                  disabled
+                  title="Only possible from a native app — not something a browser can do"
+                >
                   <Share className="size-4" data-icon="inline-start" />
                   Save to camera roll
                 </Button>
               </div>
+              {downloadState === "error" ? (
+                <p className="mt-2 text-xs text-destructive">
+                  Couldn&apos;t download — the images may have expired. Try regenerating this
+                  slideshow.
+                </p>
+              ) : null}
 
               <div className="mt-6 rounded-2xl border border-border bg-background p-4">
                 <div className="flex items-center justify-between">

@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
-export type PreviewSlide = { index: number; text: string };
+export type PreviewSlide = { index: number; text: string; imageUrl?: string };
 
 const STRIPES =
   "bg-[repeating-linear-gradient(135deg,var(--color-muted)_0px,var(--color-muted)_10px,transparent_10px,transparent_20px)]";
@@ -71,6 +71,19 @@ export function SlideshowPhonePreview({ slides }: { slides: PreviewSlide[] }) {
           transition: dragging.current ? "none" : "transform 200ms ease-out",
         }}
       >
+        {slide?.imageUrl ? (
+          // Plain <img>, not next/image — these are ephemeral third-party
+          // Ideogram URLs, not worth adding to next.config's image domain
+          // allowlist for.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={slide.imageUrl}
+            alt=""
+            className="absolute inset-0 size-full object-cover"
+            draggable={false}
+          />
+        ) : null}
+
         <span className="absolute top-3 left-3 rounded-2xl bg-void/70 px-2 py-0.5 text-[10px] font-semibold text-bone">
           {active + 1} / {slides.length}
         </span>

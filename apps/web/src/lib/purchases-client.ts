@@ -11,7 +11,7 @@ export type PurchaseStatus = "PENDING" | "PAID" | "FAILED" | "CANCELED";
 export type PurchaseSummary = {
   id: string;
   idea: string;
-  slides: { index: number; text: string }[];
+  slides: { index: number; text: string; imageUrl?: string }[];
   status: PurchaseStatus;
   createdAt: string;
 };
@@ -31,6 +31,30 @@ export async function fetchPurchase(id: string): Promise<PurchaseSummary | null>
   const data = await res.json();
   if (!data || data.error) return null;
   return { id, idea: data.idea ?? "", slides: data.slides ?? [], status: data.status, createdAt: "" };
+}
+
+// Real download — server fetches each slide's image and zips them (see
+// GET /api/purchases/:id/download), so this is just triggering a browser
+// save on whatever comes back, not building anything client-side.
+export async function downloadPurchaseZip(purchaseId: string): Promise<void> {
+  const res = await fetch(`${SERVER_URL}/api/purchases/${purchaseId}/download`, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error ?? "Could not download this slideshow.");
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `slideshow-${purchaseId}.zip`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 // No real plan/subscription backend exists yet — this is a real count (of

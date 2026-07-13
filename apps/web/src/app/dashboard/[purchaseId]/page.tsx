@@ -1,17 +1,19 @@
 "use client";
 
-import { ChevronLeft, Loader2 } from "lucide-react";
+import { ChevronLeft, Download, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
-import { fetchPurchase, type PurchaseSummary } from "@/lib/purchases-client";
+import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
+import { downloadPurchaseZip, fetchPurchase, type PurchaseSummary } from "@/lib/purchases-client";
 
 export default function SlideshowDetailPage() {
   const params = useParams<{ purchaseId: string }>();
   const [purchase, setPurchase] = useState<PurchaseSummary | null | "not_found">(null);
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
 
   useEffect(() => {
     fetchPurchase(params.purchaseId).then((data) => setPurchase(data ?? "not_found"));
@@ -40,6 +42,19 @@ export default function SlideshowDetailPage() {
   }
 
   const title = purchase.slides[0]?.text || purchase.idea || "Your slideshow";
+  const hasAnyImage = purchase.slides.some((slide) => slide.imageUrl);
+
+  async function handleDownload() {
+    if (purchase === null || purchase === "not_found") return;
+    setDownloadState("downloading");
+    try {
+      await downloadPurchaseZip(purchase.id);
+      setDownloadState("idle");
+    } catch (error) {
+      console.error(error);
+      setDownloadState("error");
+    }
+  }
 
   return (
     <div className="flex-1 p-4 sm:p-6 lg:p-8">
@@ -54,26 +69,37 @@ export default function SlideshowDetailPage() {
         <ChevronLeft className="size-4" />
       </Button>
 
-      <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-        {purchase.slides.length} slides
-      </p>
-      <h1 className="mt-1 font-display text-2xl font-bold text-foreground sm:text-3xl">{title}</h1>
+      <div className="grid gap-10 lg:grid-cols-[240px_1fr]">
+        <SlideshowPhonePreview slides={purchase.slides} />
 
-      <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {purchase.slides.map((slide) => (
-          <div
-            key={slide.index}
-            className="animate-in fade-in-0 slide-in-from-bottom-2 flex min-h-[180px] flex-col justify-between rounded-2xl border border-border bg-card p-4 shadow-sm duration-500 ease-out"
-            style={{ animationDelay: `${Math.min(slide.index - 1, 6) * 60}ms` }}
+        <div>
+          <p className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            {purchase.slides.length} slides
+          </p>
+          <h1 className="mt-1 font-display text-2xl font-bold text-foreground sm:text-3xl">
+            {title}
+          </h1>
+
+          <Button
+            size="lg"
+            className="mt-6 gap-2"
+            onClick={handleDownload}
+            disabled={!hasAnyImage || downloadState === "downloading"}
+            title={hasAnyImage ? undefined : "No images available for this slideshow"}
           >
-            <span className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-              Slide {slide.index} / {purchase.slides.length}
-            </span>
-            <p className="font-display text-base leading-tight font-bold text-foreground">
-              {slide.text}
+            {downloadState === "downloading" ? (
+              <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+            ) : (
+              <Download className="size-4" data-icon="inline-start" />
+            )}
+            Download all {purchase.slides.length} slides
+          </Button>
+          {downloadState === "error" ? (
+            <p className="mt-2 text-xs text-destructive">
+              Couldn&apos;t download — the images may have expired.
             </p>
-          </div>
-        ))}
+          ) : null}
+        </div>
       </div>
     </div>
   );

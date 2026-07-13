@@ -11,7 +11,7 @@ import { env } from "@viraltiktokslideshows/env/web";
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 const STORAGE_KEY = "vts:pending-slideshow";
 
-export type PendingSlide = { index: number; text: string };
+export type PendingSlide = { index: number; text: string; imageUrl?: string };
 
 export type PendingSlideshow = {
   id: string;

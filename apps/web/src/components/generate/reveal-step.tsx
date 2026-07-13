@@ -13,6 +13,7 @@ export function RevealStep({
   onNext: () => void;
 }) {
   const remaining = Math.max(data.slideCount - 1, 0);
+  const hookImageUrl = data.slides[0]?.imageUrl;
 
   return (
     <StepShell>
@@ -24,13 +25,42 @@ export function RevealStep({
         <div className="relative mt-8 h-[260px] w-[190px] sm:h-[300px] sm:w-[220px]">
           <div className="absolute top-1/2 left-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 -rotate-6 rounded-2xl border border-border bg-muted/60" />
           <div className="absolute top-1/2 left-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 rotate-6 rounded-2xl border border-border bg-muted/60" />
-          <div className="absolute top-1/2 left-1/2 flex h-full w-full -translate-x-1/2 -translate-y-1/2 flex-col justify-between overflow-hidden rounded-2xl border border-border bg-card p-4 text-left shadow-xl">
-            <span className="font-mono text-[10px] tracking-widest text-muted-foreground uppercase">
-              Slide 1 / {data.slideCount}
-            </span>
-            <p className="font-display text-xl leading-tight font-bold text-foreground sm:text-2xl">
-              {data.hook}
-            </p>
+          <div className="absolute top-1/2 left-1/2 h-full w-full -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
+            {hookImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={hookImageUrl}
+                alt=""
+                className="absolute inset-0 size-full object-cover"
+                draggable={false}
+              />
+            ) : null}
+            <div
+              className={
+                hookImageUrl
+                  ? "absolute inset-x-0 bottom-0 bg-gradient-to-t from-void/80 via-void/10 to-transparent p-4 pt-12 text-left"
+                  : "flex h-full flex-col justify-between p-4 text-left"
+              }
+            >
+              <span
+                className={
+                  hookImageUrl
+                    ? "hidden"
+                    : "font-mono text-[10px] tracking-widest text-muted-foreground uppercase"
+                }
+              >
+                Slide 1 / {data.slideCount}
+              </span>
+              <p
+                className={
+                  hookImageUrl
+                    ? "font-display text-xl leading-tight font-bold text-white sm:text-2xl"
+                    : "font-display text-xl leading-tight font-bold text-foreground sm:text-2xl"
+                }
+              >
+                {data.hook}
+              </p>
+            </div>
           </div>
         </div>
 

@@ -6,7 +6,22 @@ import { env } from "@viraltiktokslideshows/env/web";
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
 import { StepShell } from "./step-shell";
-import { FALLBACK_SLIDESHOW, type GeneratedSlideshow } from "./types";
+import type { GeneratedSlideshow } from "./types";
+
+// Retired: superseded by generating-step.tsx (real generation, no silent
+// mock fallback). Not imported anywhere — kept only until the cleanup
+// commands in commands.txt are run, so it's not worth wiring this fallback
+// to anything real. Inlined instead of importing the shared constant so
+// this file doesn't hold up type-checking after that constant was removed.
+const DEAD_CODE_FALLBACK: GeneratedSlideshow = {
+  id: "unused",
+  idea: "",
+  formats: [],
+  vibes: [],
+  hook: "",
+  slideCount: 0,
+  slides: [],
+};
 
 const TIPS = [
   "Most viral slideshows are 6–8 slides. We're building yours to match.",
@@ -58,7 +73,7 @@ export function LoadingStep({
       body: JSON.stringify({ idea, formats, vibes }),
     })
       .then((res) => res.json() as Promise<GeneratedSlideshow>)
-      .catch(() => FALLBACK_SLIDESHOW);
+      .catch(() => DEAD_CODE_FALLBACK);
 
     Promise.all([request, minDelay]).then(([data]) => {
       if (cancelled) return;

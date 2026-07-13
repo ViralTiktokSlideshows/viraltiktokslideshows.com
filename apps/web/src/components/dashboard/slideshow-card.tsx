@@ -22,6 +22,7 @@ export function SlideshowCard({ purchase }: { purchase: PurchaseSummary }) {
   const title = purchase.slides[0]?.text || purchase.idea || "Untitled slideshow";
   const config = STATUS_CONFIG[purchase.status];
   const relative = purchase.createdAt ? formatRelativeTime(purchase.createdAt) : "";
+  const thumbnailUrl = purchase.slides[0]?.imageUrl;
 
   const subtext =
     purchase.status === "PENDING"
@@ -32,7 +33,11 @@ export function SlideshowCard({ purchase }: { purchase: PurchaseSummary }) {
 
   return (
     <div className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all hover:border-foreground/20 hover:shadow-md">
-      <div className={cn("relative aspect-4/3 w-full", STRIPES)}>
+      <div className={cn("relative aspect-4/3 w-full", !thumbnailUrl && STRIPES)}>
+        {thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={thumbnailUrl} alt="" className="absolute inset-0 size-full object-cover" />
+        ) : null}
         <span
           className={cn(
             "absolute top-2.5 right-2.5 rounded-2xl px-2 py-1 text-[10px] font-semibold tracking-widest uppercase",
