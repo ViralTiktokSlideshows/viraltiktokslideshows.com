@@ -1,8 +1,8 @@
 "use client";
 
 import { CheckCircle2, Loader2 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 
 import {
   AuthSplitShell,
@@ -14,27 +14,45 @@ import { useSession } from "@/lib/auth-client";
 import {
   clearPendingSlideshow,
   createCheckoutSession,
+  decodePendingCheckout,
+  encodePendingCheckout,
   readPendingSlideshow,
-  type PendingSlideshow,
+  savePendingCheckout,
+  type PendingCheckout,
 } from "@/lib/checkout-client";
 
 // Mode 2 of the auth screen: reached from UnlockStep when a signed-out user
 // clicks "Unlock for $2". The slideshow they were about to buy was stashed
-// in sessionStorage first (see checkout-client.ts). Google/magic-link both
-// redirect back to this exact page as their callbackURL, so once a session
-// cookie lands here we pick the pending slideshow back up and fire the Dodo
-// checkout automatically — no extra click needed after signing in.
-export default function GenerateCheckoutPage() {
+// in sessionStorage first (see checkout-client.ts). Google redirects back
+// to this exact page as its callbackURL (same browser, so sessionStorage
+// still has it); the magic-link callbackURL additionally carries the whole
+// pending checkout as a `?slideshow=` param, since the email it's sent to
+// can be opened on a completely different device where sessionStorage is
+// empty. Either way, once a session cookie lands here we pick the pending
+// checkout back up and fire the Dodo checkout automatically.
+function GenerateCheckoutContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isPending } = useSession();
-  const [slideshow, setSlideshow] = useState<PendingSlideshow | null>(null);
+  const [slideshow, setSlideshow] = useState<PendingCheckout | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    setSlideshow(readPendingSlideshow());
+    const encoded = searchParams.get("slideshow");
+    const fromUrl = encoded ? decodePendingCheckout(encoded) : null;
+
+    if (fromUrl) {
+      savePendingCheckout(fromUrl);
+      setSlideshow(fromUrl);
+    } else {
+      setSlideshow(readPendingSlideshow());
+    }
     setHydrated(true);
+    // Only ever run this once per page load — the URL param is a handoff
+    // for the very first render, not something to keep re-syncing from.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -61,8 +79,11 @@ export default function GenerateCheckoutPage() {
     }
   }, [hydrated, slideshow, router]);
 
-  const callbackURL =
-    typeof window !== "undefined" ? `${window.location.origin}/generate/checkout` : "/generate/checkout";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const googleCallbackURL = `${origin}/generate/checkout`;
+  const magicLinkCallbackURL = slideshow
+    ? `${origin}/generate/checkout?slideshow=${encodePendingCheckout(slideshow)}`
+    : googleCallbackURL;
 
   if (!hydrated || !slideshow) {
     return (
@@ -71,8 +92,6 @@ export default function GenerateCheckoutPage() {
       </div>
     );
   }
-
-  if (!slideshow) return null;
 
   return (
     <AuthSplitShell
@@ -119,12 +138,12 @@ export default function GenerateCheckoutPage() {
           </p>
 
           <div className="mt-8 flex flex-col gap-4">
-            <GoogleAuthButton label="Continue with Google & pay $2" callbackURL={callbackURL} />
+            <GoogleAuthButton label="Continue with Google & pay $2" callbackURL={googleCallbackURL} />
             <OrDivider />
             <MagicLinkForm
               buttonLabel="Sign in & pay"
-              helperText="We'll email you a secure sign-in link, then take you straight to checkout."
-              callbackURL={callbackURL}
+              helperText="We'll email you a secure sign-in link, then take you straight to checkout — works even if you open it on your phone."
+              callbackURL={magicLinkCallbackURL}
             />
           </div>
 
@@ -144,5 +163,13 @@ export default function GenerateCheckoutPage() {
         </>
       )}
     </AuthSplitShell>
+  );
+}
+
+export default function GenerateCheckoutPage() {
+  return (
+    <Suspense fallback={null}>
+      <GenerateCheckoutContent />
+    </Suspense>
   );
 }
