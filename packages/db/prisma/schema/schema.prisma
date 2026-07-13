@@ -95,6 +95,13 @@ model Purchase {
   status         PurchaseStatus @default(PENDING)
   dodoCheckoutId String?
   dodoPaymentId  String?
+  // Client-generated per-attempt key (see apps/web/src/lib/checkout-client.ts).
+  // Lets /api/checkout/create be called more than once for the same unlock
+  // attempt (double-click, retry, resumed after magic-link sign-in) without
+  // creating a second PENDING purchase — repeat calls with the same key
+  // return the cached checkoutUrl below instead of hitting Dodo again.
+  idempotencyKey String?        @unique
+  checkoutUrl    String?
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
