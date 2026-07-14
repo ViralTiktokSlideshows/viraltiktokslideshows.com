@@ -21,11 +21,15 @@ COPY packages/env/package.json packages/env/
 COPY packages/ui/package.json packages/ui/
 COPY apps/web/package.json apps/web/
 
-# NEXT_PUBLIC_SERVER_URL (packages/env/src/web.ts) is read at the top of next.config.ts and
-# gets baked into the client bundle at build time — it is NOT read at container runtime.
+# Both NEXT_PUBLIC_* vars (packages/env/src/web.ts) are read at the top of next.config.ts and
+# get baked into the client bundle at build time — neither is read at container runtime, and
+# both are required (env-nextjs throws if either is missing), so `next build` fails without them.
 # Override via: --build-arg NEXT_PUBLIC_SERVER_URL=https://your-api.example.com
+#               --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY=0x...
 ARG NEXT_PUBLIC_SERVER_URL=http://localhost:3000
 ENV NEXT_PUBLIC_SERVER_URL=${NEXT_PUBLIC_SERVER_URL}
+ARG NEXT_PUBLIC_TURNSTILE_SITE_KEY
+ENV NEXT_PUBLIC_TURNSTILE_SITE_KEY=${NEXT_PUBLIC_TURNSTILE_SITE_KEY}
 
 RUN pnpm install --frozen-lockfile
 
