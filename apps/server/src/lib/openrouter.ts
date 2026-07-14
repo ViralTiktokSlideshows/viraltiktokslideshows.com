@@ -14,6 +14,10 @@ export type GeneratedSlideshowText = {
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
 
+type OpenRouterResponse = {
+  choices?: { message?: { content?: string } }[];
+};
+
 // A hung upstream call shouldn't leave the user stuck on the loading step
 // indefinitely — cut it off and let the caller surface a real error.
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -69,8 +73,8 @@ export async function generateSlideshowText(idea: string): Promise<GeneratedSlid
     throw new Error(`OpenRouter request failed (${res.status}): ${body.slice(0, 300)}`);
   }
 
-  const data = await res.json();
-  const content: string | undefined = data?.choices?.[0]?.message?.content;
+  const data = (await res.json()) as OpenRouterResponse;
+  const content = data.choices?.[0]?.message?.content;
   if (!content) throw new Error("OpenRouter returned no content");
 
   const slideTexts = parseSlidesJson(content);
@@ -78,8 +82,13 @@ export async function generateSlideshowText(idea: string): Promise<GeneratedSlid
     throw new Error("OpenRouter returned an unusable slide list");
   }
 
+  const hookText = slideTexts[0];
+  if (hookText === undefined) {
+    throw new Error("OpenRouter returned an unusable slide list");
+  }
+
   return {
-    hook: slideTexts[0],
+    hook: hookText,
     slides: slideTexts.map((text, i) => ({ index: i + 1, text })),
   };
 }
@@ -91,7 +100,8 @@ function parseSlidesJson(raw: string): string[] | null {
   let text = raw.trim();
 
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenced) text = fenced[1].trim();
+  const fencedGroup = fenced?.[1];
+  if (fencedGroup) text = fencedGroup.trim();
 
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");

@@ -17,11 +17,18 @@ export type GeneratedSlideshow = {
 export async function generateSlideshow(idea: string): Promise<GeneratedSlideshow> {
   const { hook, slides } = await generateSlideshowText(idea);
 
-  const hookImages = await generateSlideImages([slides[0]]);
-  const hookImageUrl = hookImages.get(slides[0].index);
+  // generateSlideshowText guarantees at least 3 slides, but noUncheckedIndexedAccess
+  // doesn't know that — guard explicitly rather than asserting.
+  const hookSlide = slides[0];
+  if (!hookSlide) {
+    return { hook, slideCount: slides.length, slides };
+  }
+
+  const hookImages = await generateSlideImages([hookSlide]);
+  const hookImageUrl = hookImages.get(hookSlide.index);
 
   const enrichedSlides: GeneratedSlide[] = slides.map((slide) =>
-    slide.index === slides[0].index ? { ...slide, imageUrl: hookImageUrl } : slide,
+    slide.index === hookSlide.index ? { ...slide, imageUrl: hookImageUrl } : slide,
   );
 
   return { hook, slideCount: enrichedSlides.length, slides: enrichedSlides };
