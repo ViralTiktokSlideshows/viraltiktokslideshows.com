@@ -1,6 +1,0 @@
-cd C:\Users\kinzi\Desktop\projects\viraltiktokslideshows
-git add -A
-git commit -m "Delete dead generate-flow files; add real Terms/Privacy pages and link them; fill Turnstile keys"
-pnpm install
-pnpm --filter web build
-pnpm --filter server check-types
