@@ -461,7 +461,10 @@ app.get("/api/purchases/:id/download", async (c) => {
     );
   }
 
-  const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+  // "uint8array" (not "nodebuffer") — Hono's c.body() wants a plain
+  // Uint8Array<ArrayBuffer>, and Node's Buffer type doesn't structurally
+  // match that under strict TS lib typings.
+  const zipBuffer = await zip.generateAsync({ type: "uint8array" });
 
   return c.body(zipBuffer, 200, {
     "Content-Type": "application/zip",
