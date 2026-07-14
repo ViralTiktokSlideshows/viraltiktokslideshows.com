@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Viral Tiktok Slideshows",
+  title: "Privacy Policy",
+  description:
+    "What Viral TikTok Slideshows collects, why, and who it's shared with — your account, the ideas you type, payment metadata, and the third-party services that power generation.",
+  alternates: { canonical: "/privacy" },
 };
 
 const SECTIONS = [

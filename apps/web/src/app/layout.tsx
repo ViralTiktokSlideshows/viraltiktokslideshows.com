@@ -42,9 +42,67 @@ const clashDisplay = localFont({
   display: "swap",
 });
 
+const SITE_NAME = "Viral TikTok Slideshows";
+const SITE_DESCRIPTION =
+  "Turn a single idea into a post-ready, viral TikTok slideshow — hook, slides, and images generated in about 30 seconds. See your hook slide free, unlock the full deck for $2.";
+
 export const metadata: Metadata = {
-  title: "viraltiktokslideshows",
-  description: "viraltiktokslideshows",
+  metadataBase: new URL("https://viraltiktokslideshows.com"),
+  title: {
+    template: `%s | ${SITE_NAME}`,
+    default: `${SITE_NAME} — Turn Any Idea Into a Viral Slideshow`,
+  },
+  description: SITE_DESCRIPTION,
+  keywords: [
+    "TikTok slideshow maker",
+    "viral TikTok slideshows",
+    "TikTok slideshow generator",
+    "AI slideshow maker",
+    "TikTok carousel maker",
+    "AI TikTok content generator",
+    "TikTok slide deck maker",
+    "viral content generator",
+  ],
+  authors: [{ name: SITE_NAME }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "technology",
+  alternates: {
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: "/",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — Turn Any Idea Into a Viral Slideshow`,
+    description: SITE_DESCRIPTION,
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: SITE_NAME,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — Turn Any Idea Into a Viral Slideshow`,
+    description: SITE_DESCRIPTION,
+    images: ["/opengraph-image"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
 };
 
 export default function RootLayout({

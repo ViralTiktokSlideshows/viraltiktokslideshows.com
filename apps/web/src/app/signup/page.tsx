@@ -10,7 +10,11 @@ import {
 } from "@/components/auth/auth-split-layout";
 
 export const metadata: Metadata = {
-  title: "Sign up — Viral Tiktok Slideshows",
+  title: "Sign Up",
+  description: "Create a free account to save your slideshows and generate more.",
+  // No unique content beyond auth buttons, and /generate is already the
+  // indexed, free-to-try conversion entry point — avoid a thin duplicate.
+  robots: { index: false, follow: true },
 };
 
 export default async function SignUpPage({

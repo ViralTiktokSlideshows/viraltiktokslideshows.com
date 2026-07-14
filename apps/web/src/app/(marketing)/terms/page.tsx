@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — Viral Tiktok Slideshows",
+  title: "Terms of Service",
+  description:
+    "The terms that govern using Viral TikTok Slideshows — the free preview, the $2 unlock, accounts, payments, and acceptable use.",
+  alternates: { canonical: "/terms" },
 };
 
 const SECTIONS = [

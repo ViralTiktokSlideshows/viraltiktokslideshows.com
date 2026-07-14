@@ -1,9 +1,18 @@
 import { Zap } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
 import { GenerateShell } from "@/components/dashboard/generate-shell";
+
+// Reached mid-flow, not a primary landing destination, and its pricing
+// content overlaps the homepage's Pricing section — noindex to avoid
+// diluting authority with a thin/duplicate page.
+export const metadata: Metadata = {
+  title: "Upgrade",
+  robots: { index: false, follow: true },
+};
 
 // Visual only for now: there's no Dodo subscription product or credits
 // backend behind these plans yet, so the monthly tiers are intentionally
