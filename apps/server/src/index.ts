@@ -1,4 +1,5 @@
-import prisma, { type User } from "@viraltiktokslideshows/db";
+import prisma from "@viraltiktokslideshows/db";
+import type { User } from "@viraltiktokslideshows/db";
 import { env } from "@viraltiktokslideshows/env/server";
 import * as arctic from "arctic";
 import { Hono } from "hono";
