@@ -105,12 +105,12 @@ export function FinalCta() {
               © 2026 viraltiktokslideshows. All rights reserved.
             </p>
             <div className="flex gap-5 text-xs text-muted-foreground">
-              <a href="#" className="hover:text-foreground">
+              <Link href="/privacy" className="hover:text-foreground">
                 Privacy Policy
-              </a>
-              <a href="#" className="hover:text-foreground">
+              </Link>
+              <Link href="/terms" className="hover:text-foreground">
                 Terms of Service
-              </a>
+              </Link>
               <a href="#" className="hover:text-foreground">
                 Cookies Settings
               </a>

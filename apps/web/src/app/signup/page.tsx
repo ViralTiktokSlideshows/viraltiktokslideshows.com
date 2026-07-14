@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { SlideDeck } from "@/components/landing/slide-deck";
 import {
@@ -49,13 +50,13 @@ export default async function SignUpPage({
 
       <p className="mt-6 text-xs text-muted-foreground">
         By continuing you agree to our{" "}
-        <a href="#" className="text-riot hover:underline">
+        <Link href="/terms" className="text-riot hover:underline">
           Terms
-        </a>{" "}
+        </Link>{" "}
         and{" "}
-        <a href="#" className="text-riot hover:underline">
+        <Link href="/privacy" className="text-riot hover:underline">
           Privacy policy
-        </a>
+        </Link>
         .
       </p>
     </AuthSplitShell>

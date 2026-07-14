@@ -18,6 +18,7 @@ import {
 } from "./lib/google-oauth";
 import { isMagicLinkRateLimited, sendMagicLinkEmail, verifyMagicLinkToken } from "./lib/magic-link";
 import { getClientIp, isRateLimited } from "./lib/rate-limit";
+import { verifyTurnstileToken } from "./lib/turnstile";
 import {
   clearSessionCookie,
   createSession,
@@ -145,6 +146,11 @@ app.post("/api/auth/magic-link", async (c) => {
     );
   }
 
+  const humanVerified = await verifyTurnstileToken(body?.turnstileToken, ip);
+  if (!humanVerified) {
+    return c.json({ error: "Verification failed. Refresh and try again." }, 403);
+  }
+
   await sendMagicLinkEmail(email, callbackURL);
   return c.json({ success: true });
 });
@@ -205,10 +211,11 @@ app.get("/", (c) => {
 // Real generation: slide text via OpenRouter (google/gemini-3.5-flash),
 // then a real background image for the hook slide only via Ideogram — see
 // lib/generate-slideshow.ts for why the rest of the images wait until
-// checkout. This is free to call and unauthenticated, so it's rate
-// limited per-IP; a genuine failure surfaces as a real error (the client's
-// GeneratingStep treats any non-2xx as a hard failure and shows the retry
-// screen) rather than silently degrading to mock data.
+// checkout. This is free to call and unauthenticated, so it's both rate
+// limited per-IP and gated behind Cloudflare Turnstile (see ./lib/turnstile.ts);
+// a genuine failure surfaces as a real error (the client's GeneratingStep
+// treats any non-2xx as a hard failure and shows the retry screen) rather
+// than silently degrading to mock data.
 app.post("/api/generate", async (c) => {
   const ip = getClientIp(c);
   if (isRateLimited(`generate:ip:${ip}`, 12, 1000 * 60 * 15)) {
@@ -222,6 +229,11 @@ app.post("/api/generate", async (c) => {
 
   if (!idea) {
     return c.json({ error: "An idea is required" }, 400);
+  }
+
+  const humanVerified = await verifyTurnstileToken(body?.turnstileToken, ip);
+  if (!humanVerified) {
+    return c.json({ error: "Verification failed. Refresh and try again." }, 403);
   }
 
   try {

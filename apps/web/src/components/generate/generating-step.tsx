@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { env } from "@viraltiktokslideshows/env/web";
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
+import { TurnstileWidget } from "@/components/turnstile-widget";
+
 import type { GeneratedSlideshow } from "./types";
 
 const TIPS = [
@@ -28,6 +30,11 @@ export function GeneratingStep({
   const [tipIndex, setTipIndex] = useState(0);
   const [tipVisible, setTipVisible] = useState(true);
   const [progress, setProgress] = useState(6);
+  // Gates the actual request — nothing fires until Turnstile hands back a
+  // token. This component unmounts/remounts on every "generating" step
+  // entry (including retries from ErrorStep), so a fresh token is always
+  // obtained rather than reusing a single-use, already-spent one.
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   useEffect(() => {
     const tipInterval = setInterval(() => {
@@ -41,6 +48,8 @@ export function GeneratingStep({
   }, []);
 
   useEffect(() => {
+    if (!turnstileToken) return;
+
     let cancelled = false;
     const progressInterval = setInterval(() => {
       setProgress((prev) => (prev < 90 ? prev + Math.random() * 10 : prev));
@@ -50,7 +59,7 @@ export function GeneratingStep({
     const request = fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea, formats: [], vibes: [] }),
+      body: JSON.stringify({ idea, formats: [], vibes: [], turnstileToken }),
     }).then((res) => {
       if (!res.ok) throw new Error("Generate request failed");
       return res.json() as Promise<GeneratedSlideshow>;
@@ -76,7 +85,7 @@ export function GeneratingStep({
       clearInterval(progressInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [turnstileToken]);
 
   return (
     <div className="animate-in fade-in-0 flex flex-1 flex-col items-center justify-center px-4 py-12 text-center duration-500 ease-out sm:px-6">
@@ -110,6 +119,8 @@ export function GeneratingStep({
       </div>
 
       <p className="mt-4 max-w-xs truncate text-xs text-muted-foreground">{idea}</p>
+
+      <TurnstileWidget onVerify={setTurnstileToken} className="mt-4" />
     </div>
   );
 }

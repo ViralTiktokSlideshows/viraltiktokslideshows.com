@@ -41,10 +41,10 @@ export function signInWithGoogle(callbackURL: string) {
   window.location.href = url.toString();
 }
 
-export async function sendMagicLink(email: string, callbackURL: string) {
+export async function sendMagicLink(email: string, callbackURL: string, turnstileToken: string) {
   const res = await apiFetch("/api/auth/magic-link", {
     method: "POST",
-    body: JSON.stringify({ email, callbackURL }),
+    body: JSON.stringify({ email, callbackURL, turnstileToken }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

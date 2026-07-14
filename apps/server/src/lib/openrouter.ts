@@ -14,6 +14,10 @@ export type GeneratedSlideshowText = {
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
 
+// A hung upstream call shouldn't leave the user stuck on the loading step
+// indefinitely — cut it off and let the caller surface a real error.
+const REQUEST_TIMEOUT_MS = 30_000;
+
 const SYSTEM_PROMPT = `You write short, punchy TikTok slideshow scripts.
 
 Return ONLY a JSON object, no markdown fences, no commentary, matching this exact shape:
@@ -27,24 +31,38 @@ Rules:
 - Write in a confident, conversational voice — like a smart friend explaining something, not a corporate caption.`;
 
 export async function generateSlideshowText(idea: string): Promise<GeneratedSlideshowText> {
-  const res = await fetch(OPENROUTER_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": env.SERVER_URL,
-      "X-Title": "Viral TikTok Slideshows",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      response_format: { type: "json_object" },
-      temperature: 0.9,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Idea: ${idea}` },
-      ],
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": env.SERVER_URL,
+        "X-Title": "Viral TikTok Slideshows",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        response_format: { type: "json_object" },
+        temperature: 0.9,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: `Idea: ${idea}` },
+        ],
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`OpenRouter request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");

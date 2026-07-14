@@ -1,6 +1,7 @@
 "use client";
 
 import { CheckCircle2, Loader2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
@@ -151,13 +152,13 @@ function GenerateCheckoutContent() {
 
           <p className="mt-6 text-xs text-muted-foreground">
             Payments are processed securely by DodoPayments. By continuing you agree to our{" "}
-            <a href="#" className="text-riot hover:underline">
+            <Link href="/terms" className="text-riot hover:underline">
               Terms
-            </a>{" "}
+            </Link>{" "}
             and{" "}
-            <a href="#" className="text-riot hover:underline">
+            <Link href="/privacy" className="text-riot hover:underline">
               Privacy policy
-            </a>
+            </Link>
             .
           </p>
         </>

@@ -1,5 +1,7 @@
 import { env } from "@viraltiktokslideshows/env/server";
 
+import { persistImageToR2 } from "./r2";
+
 // Ideogram v4 generate endpoint — background images for slide cards. The
 // app overlays its own text on top (see SlideshowPhonePreview and the
 // tilted card treatments), so prompts explicitly ask for no embedded text.
@@ -8,15 +10,35 @@ import { env } from "@viraltiktokslideshows/env/server";
 // request body is multipart/form-data, not JSON — both per Ideogram's own
 // docs, not the OpenAI-style convention used elsewhere in this app.
 //
-// Important: returned image URLs are ephemeral — Ideogram's own docs say
-// "if you would like to keep the image, you must download it." We don't
-// have persistent object storage wired up yet, so these URLs are stored
-// as-is on the Purchase row. They're generated close to when they'll
-// actually be viewed/downloaded (checkout time, not the free-preview
-// step), but a slideshow viewed much later from the dashboard may have
-// expired image links — see docs/dashboard-spec.md follow-ups.
+// Ideogram's own docs say returned image URLs are ephemeral ("if you would
+// like to keep the image, you must download it"), so every image is
+// re-uploaded to R2 immediately after generation (see ./r2.ts) and it's
+// the R2 URL — never the raw Ideogram one — that gets returned/persisted.
 
 const IDEOGRAM_URL = "https://api.ideogram.ai/v1/ideogram-v4/generate";
+
+// Ideogram v4 only offers a fixed set of 2K resolutions (no free-form
+// aspect_ratio param like v3 had). 1440x2560 is the one exact 9:16 option
+// in that list — matches the phone-mockup slide format natively instead
+// of relying on object-cover cropping.
+const RESOLUTION = "1440x2560";
+
+// Generation can occasionally hang past what a user will wait out — cut it
+// off rather than leaving "Building your slideshow…" spinning forever.
+const REQUEST_TIMEOUT_MS = 45_000;
+
+type IdeogramImageObject = {
+  url: string | null;
+  is_image_safe: boolean;
+  resolution: string;
+  prompt: string;
+  seed: number;
+};
+
+type IdeogramResponse = {
+  created: string;
+  data: IdeogramImageObject[];
+};
 
 function buildImagePrompt(slideText: string): string {
   return `A vertical, mobile-first background photo for a TikTok slideshow slide. Slide topic: "${slideText}". Minimal and cinematic, realistic photography style, no embedded text, no captions, no watermarks, no logos — the image is a backdrop only, text gets overlaid separately.`;
@@ -26,23 +48,48 @@ export async function generateSlideImage(slideText: string): Promise<string> {
   const form = new FormData();
   form.append("text_prompt", buildImagePrompt(slideText));
   form.append("rendering_speed", "TURBO");
+  form.append("resolution", RESOLUTION);
 
-  const res = await fetch(IDEOGRAM_URL, {
-    method: "POST",
-    headers: { "Api-Key": env.IDEOGRAM_API_KEY },
-    body: form,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(IDEOGRAM_URL, {
+      method: "POST",
+      headers: { "Api-Key": env.IDEOGRAM_API_KEY },
+      body: form,
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Ideogram request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`Ideogram request failed (${res.status}): ${body.slice(0, 300)}`);
   }
 
-  const data = await res.json();
-  const url: string | undefined = data?.data?.[0]?.url;
-  if (!url) throw new Error("Ideogram returned no image URL");
+  const data = (await res.json()) as IdeogramResponse;
+  const image = data?.data?.[0];
 
-  return url;
+  // Per Ideogram's own schema: if is_image_safe is false, the url field is
+  // empty. Check the flag explicitly (rather than just checking for a
+  // missing url) so a future API change that still returns a url alongside
+  // is_image_safe: false doesn't slip an unsafe image through.
+  if (!image || !image.is_image_safe || !image.url) {
+    throw new Error("Ideogram returned no safe image");
+  }
+
+  // Ephemeral Ideogram URL -> permanent R2 URL, immediately, before it can
+  // expire. Key is unique per generation; no need to reuse/dedupe.
+  const key = `slides/${crypto.randomUUID()}.png`;
+  return persistImageToR2(image.url, key);
 }
 
 // Generates images for multiple slides in parallel. Any single failure

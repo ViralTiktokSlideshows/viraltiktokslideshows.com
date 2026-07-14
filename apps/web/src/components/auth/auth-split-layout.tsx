@@ -3,12 +3,13 @@
 import { Mail, Sparkles } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { Input } from "@viraltiktokslideshows/ui/components/input";
 
 import { signInWithGoogle } from "@/lib/auth-client";
+import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 
 // Shared shell for every auth screen in the app (direct signup, the
 // generate-flow "sign in & pay" step, and anything else that needs an
@@ -95,21 +96,26 @@ export function MagicLinkForm({
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const widgetRef = useRef<TurnstileWidgetHandle>(null);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !turnstileToken) return;
 
     setStatus("loading");
     setErrorMessage("");
 
     try {
       const { sendMagicLink } = await import("@/lib/auth-client");
-      await sendMagicLink(email.trim(), callbackURL);
+      await sendMagicLink(email.trim(), callbackURL, turnstileToken);
       setStatus("sent");
     } catch (error) {
       setStatus("error");
       setErrorMessage(error instanceof Error ? error.message : "Something went wrong.");
+      // Turnstile tokens are single-use — get a fresh one before the next attempt.
+      setTurnstileToken(null);
+      widgetRef.current?.reset();
     }
   }
 
@@ -137,11 +143,13 @@ export function MagicLinkForm({
         </div>
       </div>
 
+      <TurnstileWidget ref={widgetRef} onVerify={setTurnstileToken} onExpire={() => setTurnstileToken(null)} />
+
       <Button
         type="submit"
         size="lg"
         className="w-full gap-2"
-        disabled={status === "loading" || status === "sent" || !email.trim()}
+        disabled={status === "loading" || status === "sent" || !email.trim() || !turnstileToken}
       >
         <Sparkles className="size-4" data-icon="inline-start" />
         {status === "sent" ? "Check your email" : buttonLabel}
