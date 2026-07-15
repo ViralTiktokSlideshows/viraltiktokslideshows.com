@@ -8,7 +8,7 @@ import { logger } from "hono/logger";
 import JSZip from "jszip";
 import { Webhook } from "standardwebhooks";
 
-import { createUnlockCheckoutSession } from "./lib/dodo";
+import { createBillingPortalSession, createUnlockCheckoutSession } from "./lib/dodo";
 import { fillRemainingSlideImages, generateSlideshow } from "./lib/generate-slideshow";
 import {
   clearOAuthStateCookie,
@@ -42,7 +42,7 @@ app.use(
   "/*",
   cors({
     origin: env.CORS_ORIGIN,
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowMethods: ["GET", "POST", "OPTIONS", "PATCH", "DELETE"],
     allowHeaders: ["Content-Type", "Authorization"],
     exposeHeaders: ["Content-Length"],
     credentials: true,
@@ -286,6 +286,33 @@ app.delete("/api/account", async (c) => {
   return c.json({ success: true });
 });
 
+// Dodo's hosted Customer Portal — see lib/dodo.ts. Only exists once someone
+// has a dodoCustomerId, which is only set the first time a payment actually
+// succeeds (captured in the webhook below), so there's genuinely nothing to
+// manage before that regardless of plan.
+app.post("/api/billing/portal", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  if (!user.dodoCustomerId) {
+    return c.json(
+      { error: "Billing opens up after your first purchase — nothing to manage yet." },
+      404,
+    );
+  }
+
+  try {
+    const session = await createBillingPortalSession(
+      user.dodoCustomerId,
+      `${env.CORS_ORIGIN}/dashboard/settings`,
+    );
+    return c.json({ url: session.link });
+  } catch (error) {
+    console.error("Failed to create Dodo billing portal session", error);
+    return c.json({ error: "Could not open billing portal. Try again." }, 502);
+  }
+});
+
 app.get("/", (c) => {
   return c.text("OK");
 });
@@ -318,8 +345,15 @@ app.post("/api/generate", async (c) => {
     return c.json({ error: "Verification failed. Refresh and try again." }, 403);
   }
 
+  // No format-picker step in the generate flow (see generate-flow.tsx) — a
+  // signed-in user's Settings > Generation defaults preference is applied
+  // invisibly instead. Signed-out visitors (the common free-preview path)
+  // just get the STORYTIME default.
+  const user = c.get("user");
+  const format = (user?.defaultFormat ?? "STORYTIME") as "STORYTIME" | "LISTICLE" | "HOT_TAKE";
+
   try {
-    const generated = await generateSlideshow(idea);
+    const generated = await generateSlideshow(idea, format);
     return c.json({
       id: crypto.randomUUID(),
       idea,
@@ -394,6 +428,10 @@ app.post("/api/checkout/create", async (c) => {
         vibes,
         slides: enrichedSlides,
         idempotencyKey: idempotencyKey ?? undefined,
+        // Snapshot of the same preference /api/generate used for this
+        // idea's text — kept alongside the purchase so /dashboard/saved
+        // can show what style it was written in.
+        format: user.defaultFormat,
       },
     });
   } catch (error) {
@@ -616,13 +654,25 @@ app.post("/api/webhooks/dodo", async (c) => {
   }
 
   if (type === "payment.succeeded") {
-    await prisma.purchase.update({
+    const updatedPurchase = await prisma.purchase.update({
       where: { id: purchaseId },
       data: {
         status: "PAID",
         dodoPaymentId: payload?.data?.payment_id ?? payload?.data?.id ?? null,
       },
     });
+
+    // First successful payment is also the first moment a Dodo customer id
+    // exists for this user — capture it so Settings > Manage billing (Dodo's
+    // hosted Customer Portal) has something to open. "Set once" guard: never
+    // overwrite an id that's already there.
+    const dodoCustomerId: string | undefined = payload?.data?.customer?.customer_id;
+    if (dodoCustomerId) {
+      await prisma.user.updateMany({
+        where: { id: updatedPurchase.userId, dodoCustomerId: null },
+        data: { dodoCustomerId },
+      });
+    }
   } else if (type === "payment.failed") {
     await prisma.purchase.update({ where: { id: purchaseId }, data: { status: "FAILED" } });
   } else if (type === "payment.cancelled") {
