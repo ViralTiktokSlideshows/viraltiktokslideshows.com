@@ -1,5 +1,5 @@
 import { generateSlideImages } from "./ideogram";
-import { generateSlideshowText } from "./openrouter";
+import { generateSlideshowText, type SlideFormat } from "./openrouter";
 
 export type GeneratedSlide = { index: number; text: string; imageUrl?: string };
 
@@ -14,8 +14,11 @@ export type GeneratedSlideshow = {
 // and most people who try it never pay, so we don't spend Ideogram
 // credits on slides 2-N until someone actually commits to unlocking (see
 // fillRemainingSlideImages, called from /api/checkout/create).
-export async function generateSlideshow(idea: string): Promise<GeneratedSlideshow> {
-  const { hook, slides } = await generateSlideshowText(idea);
+export async function generateSlideshow(
+  idea: string,
+  format: SlideFormat = "STORYTIME",
+): Promise<GeneratedSlideshow> {
+  const { hook, slides } = await generateSlideshowText(idea, format);
 
   // generateSlideshowText guarantees at least 3 slides, but noUncheckedIndexedAccess
   // doesn't know that — guard explicitly rather than asserting.
@@ -41,4 +44,11 @@ export async function generateSlideshow(idea: string): Promise<GeneratedSlidesho
 export async function fillRemainingSlideImages(
   slides: GeneratedSlide[],
 ): Promise<GeneratedSlide[]> {
-  const missing = 
+  const missing = slides.filter((slide) => !slide.imageUrl);
+  if (missing.length === 0) return slides;
+
+  const images = await generateSlideImages(missing);
+  return slides.map((slide) =>
+    images.has(slide.index) ? { ...slide, imageUrl: images.get(slide.index) } : slide,
+  );
+}

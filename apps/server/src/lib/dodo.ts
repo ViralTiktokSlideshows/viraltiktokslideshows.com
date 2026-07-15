@@ -30,3 +30,23 @@ export async function createUnlockCheckoutSession(options: {
 
   return session;
 }
+
+// Dodo's hosted Customer Portal — lets a customer manage payment methods
+// and view invoice/payment history themselves, so Settings > Plan & Billing
+// doesn't need to build any of that UI (or store card details) itself.
+// Requires a Dodo customer id, which only exists once someone has actually
+// paid at least once — see the dodoCustomerId capture in the
+// /api/webhooks/dodo handler in index.ts.
+export type DodoPortalSession = { link: string };
+
+export async function createBillingPortalSession(
+  customerId: string,
+  returnUrl?: string,
+): Promise<DodoPortalSession> {
+  const session = (await dodo.customers.customerPortal.create(
+    customerId,
+    returnUrl ? { return_url: returnUrl } : undefined,
+  )) as DodoPortalSession;
+
+  return session;
+}

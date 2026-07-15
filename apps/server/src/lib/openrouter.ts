@@ -11,6 +11,13 @@ export type GeneratedSlideshowText = {
   slides: GeneratedSlideText[];
 };
 
+// Mirrors the Prisma SlideFormat enum (packages/db/prisma/schema/schema.prisma).
+// Kept as a plain string union here rather than importing the generated
+// enum — this file has no other Prisma dependency and the values are
+// small/stable enough that duplicating them is cheaper than coupling a
+// pure-fetch API client to the ORM's generated types.
+export type SlideFormat = "STORYTIME" | "LISTICLE" | "HOT_TAKE";
+
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
 
@@ -22,7 +29,7 @@ type OpenRouterResponse = {
 // indefinitely — cut it off and let the caller surface a real error.
 const REQUEST_TIMEOUT_MS = 30_000;
 
-const SYSTEM_PROMPT = `You write short, punchy TikTok slideshow scripts.
+const BASE_SYSTEM_PROMPT = `You write short, punchy TikTok slideshow scripts.
 
 Return ONLY a JSON object, no markdown fences, no commentary, matching this exact shape:
 {"slides": ["...", "...", "..."]}
@@ -34,9 +41,27 @@ Rules:
 - The deck should build: hook, tension/context, 3-5 payoff/insight slides, a closing slide that lands the point.
 - Write in a confident, conversational voice — like a smart friend explaining something, not a corporate caption.`;
 
-export async function generateSlideshowText(idea: string): Promise<GeneratedSlideshowText> {
+// Applied invisibly from the signed-in user's Settings > Generation
+// defaults preference (see /api/generate in index.ts) — there's no format
+// picker step in the generate flow itself anymore, so this is the only
+// place "format" actually does anything.
+const FORMAT_DIRECTIVES: Record<SlideFormat, string> = {
+  STORYTIME:
+    "Style: a narrative arc — hook, rising tension/context, insight slides, a satisfying closing line. This is the default, story-driven style.",
+  LISTICLE:
+    'Style: a numbered list. The hook slide teases a count (e.g. "5 things nobody tells you about X"), and every following slide delivers exactly one item with a short, punchy explanation — no story arc, just the list.',
+  HOT_TAKE:
+    "Style: a bold, opinionated, slightly contrarian voice — like someone dropping an unpopular but well-argued take. The hook slide is a provocative claim, not a question, and the closing slide doubles down rather than softening it.",
+};
+
+export async function generateSlideshowText(
+  idea: string,
+  format: SlideFormat = "STORYTIME",
+): Promise<GeneratedSlideshowText> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\n${FORMAT_DIRECTIVES[format]}`;
 
   let res: Response;
   try {
@@ -53,7 +78,7 @@ export async function generateSlideshowText(idea: string): Promise<GeneratedSlid
         response_format: { type: "json_object" },
         temperature: 0.9,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: `Idea: ${idea}` },
         ],
       }),
@@ -110,4 +135,15 @@ function parseSlidesJson(raw: string): string[] | null {
 
   try {
     const parsed = JSON.parse(text);
-    const slides = parsed?.
+    const slides = parsed?.slides;
+    if (!Array.isArray(slides)) return null;
+
+    const cleaned = slides
+      .map((s) => (typeof s === "string" ? s.trim() : ""))
+      .filter((s) => s.length > 0);
+
+    return cleaned.length > 0 ? cleaned : null;
+  } catch {
+    return null;
+  }
+}
