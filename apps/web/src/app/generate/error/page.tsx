@@ -7,6 +7,8 @@ import { Suspense } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
+import { BrandMark } from "@/components/brand-mark";
+
 const REASON_COPY: Record<string, string> = {
   checkout_failed: "We couldn't start your checkout session. No charge was made.",
   payment_failed: "Your payment didn't go through. Your card wasn't charged.",
@@ -21,9 +23,7 @@ function ErrorContent() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center px-6 text-center">
       <Link href="/" className="mb-8 flex items-center gap-2.5">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-2xl bg-void">
-          <span className="size-2.5 rotate-45 rounded-[2px] bg-spark" />
-        </span>
+        <BrandMark className="size-7" />
         <span className="font-display text-sm font-semibold tracking-tight text-foreground">
           viraltiktokslideshows
         </span>

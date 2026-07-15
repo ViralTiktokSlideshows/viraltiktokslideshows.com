@@ -7,6 +7,8 @@ import { Suspense } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
+import { BrandMark } from "@/components/brand-mark";
+
 // Destination for every failure redirect out of apps/server's auth routes:
 // `${CORS_ORIGIN}/auth/error?reason=...` — see google/callback (invalid_state,
 // google_failed) and magic-link/callback (missing_token, invalid_link) in
@@ -26,9 +28,7 @@ function AuthErrorContent() {
   return (
     <div className="flex min-h-svh flex-col items-center justify-center px-6 text-center">
       <Link href="/" className="mb-8 flex items-center gap-2.5">
-        <span className="flex size-7 shrink-0 items-center justify-center rounded-2xl bg-void">
-          <span className="size-2.5 rotate-45 rounded-[2px] bg-spark" />
-        </span>
+        <BrandMark className="size-7" />
         <span className="font-display text-sm font-semibold tracking-tight text-foreground">
           viraltiktokslideshows
         </span>

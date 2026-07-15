@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
+import { BrandMark } from "@/components/brand-mark";
 import { Reveal } from "@/components/reveal";
 
 const FOOTER_COLUMNS = [
@@ -52,9 +53,7 @@ export function FinalCta() {
           <Reveal className="grid gap-10 border-b border-border pb-10 sm:grid-cols-2 md:grid-cols-[1.3fr_1fr_1fr_1fr]">
             <div>
               <Link href="/" className="flex items-center gap-2.5">
-                <span className="flex size-7 items-center justify-center rounded-2xl bg-void">
-                  <span className="size-2.5 rotate-45 rounded-[2px] bg-spark" />
-                </span>
+                <BrandMark className="size-7" />
                 <span className="font-display text-sm font-semibold text-foreground">
                   viraltiktokslideshows
                 </span>

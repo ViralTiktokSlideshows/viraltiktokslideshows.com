@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
 import { useSession } from "@/lib/auth-client";
+import { BrandMark } from "@/components/brand-mark";
 
 import { AppFrame } from "./app-frame";
 import { Sidebar } from "./sidebar";
@@ -25,9 +26,7 @@ export function GenerateShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-svh bg-background">
       <div className="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <span className="flex size-7 shrink-0 items-center justify-center rounded-2xl bg-void">
-            <span className="size-2.5 rotate-45 rounded-[2px] bg-spark" />
-          </span>
+          <BrandMark className="size-7" />
           <span className="font-display text-sm font-semibold tracking-tight text-foreground">
             viraltiktokslideshows
           </span>

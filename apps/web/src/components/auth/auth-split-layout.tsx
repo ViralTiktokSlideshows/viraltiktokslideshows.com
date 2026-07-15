@@ -9,6 +9,7 @@ import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { Input } from "@viraltiktokslideshows/ui/components/input";
 
 import { signInWithGoogle } from "@/lib/auth-client";
+import { BrandMark } from "@/components/brand-mark";
 import { TurnstileWidget, type TurnstileWidgetHandle } from "@/components/turnstile-widget";
 
 // Shared shell for every auth screen in the app (direct signup, the
@@ -40,9 +41,7 @@ export function AuthSplitShell({
 export function AuthBrandHeader() {
   return (
     <Link href="/" className="flex items-center gap-2.5">
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-2xl bg-void">
-        <span className="size-2.5 rotate-45 rounded-[2px] bg-spark" />
-      </span>
+      <BrandMark className="size-7" />
       <span className="font-display text-sm font-semibold tracking-tight text-foreground">
         viraltiktokslideshows
       </span>

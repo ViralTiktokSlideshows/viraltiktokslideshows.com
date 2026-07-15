@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
+import { BrandMark } from "@/components/brand-mark";
+
 // Anchors are prefixed with "/" (not bare "#...") since this Header also
 // renders on /terms and /privacy, which don't have these sections on the
 // page — "/#pricing" navigates home and scrolls; a bare "#pricing" on those
@@ -39,4 +41,4 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py
+      <div className="mx-auto fle

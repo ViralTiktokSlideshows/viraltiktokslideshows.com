@@ -24,6 +24,7 @@ import {
 } from "@viraltiktokslideshows/ui/components/dropdown-menu";
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
+import { BrandMark } from "@/components/brand-mark";
 import { signOut, useSession } from "@/lib/auth-client";
 
 const NAV_ITEMS = [
@@ -46,9 +47,7 @@ function isActive(pathname: string, href: string) {
 function Logo({ compact }: { compact?: boolean }) {
   return (
     <Link href="/" className={cn("flex items-center gap-2.5", compact && "justify-center")}>
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-2xl bg-void">
-        <span className="size-2.5 rotate-45 rounded-[2px] bg-spark" />
-      </span>
+      <BrandMark className="size-7" />
       {!compact ? (
         <span className="font-display text-sm font-semibold tracking-tight text-foreground">
           viraltiktokslideshows
