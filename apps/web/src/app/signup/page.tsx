@@ -8,6 +8,7 @@ import {
   MagicLinkForm,
   OrDivider,
 } from "@/components/auth/auth-split-layout";
+import { resolveCallbackURL } from "@/lib/site-url";
 
 export const metadata: Metadata = {
   title: "Sign Up",
@@ -23,7 +24,12 @@ export default async function SignUpPage({
   searchParams: Promise<{ callbackURL?: string }>;
 }) {
   const params = await searchParams;
-  const callbackURL = params.callbackURL || "/";
+  // Must always come out fully-qualified (https://viraltiktokslideshows.com/...,
+  // or http://localhost:3001/... in dev) — never a bare path. The server
+  // redirects back to this URL from its own response after auth completes,
+  // so a relative path would resolve against api.viraltiktokslideshows.com
+  // instead of the web app.
+  const callbackURL = await resolveCallbackURL(params.callbackURL);
 
   return (
     <AuthSplitShell
@@ -43,26 +49,4 @@ export default async function SignUpPage({
       <p className="mt-2 text-sm text-muted-foreground">Free to start — no card required.</p>
 
       <div className="mt-8 flex flex-col gap-4">
-        <GoogleAuthButton label="Continue with Google" callbackURL={callbackURL} />
-        <OrDivider />
-        <MagicLinkForm
-          buttonLabel="Send magic link"
-          helperText="We'll email you a secure sign-in link — no password to remember."
-          callbackURL={callbackURL}
-        />
-      </div>
-
-      <p className="mt-6 text-xs text-muted-foreground">
-        By continuing you agree to our{" "}
-        <Link href="/terms" className="text-riot hover:underline">
-          Terms
-        </Link>{" "}
-        and{" "}
-        <Link href="/privacy" className="text-riot hover:underline">
-          Privacy policy
-        </Link>
-        .
-      </p>
-    </AuthSplitShell>
-  );
-}
+        <GoogleAuthButton label="Continue wi

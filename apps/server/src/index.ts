@@ -66,10 +66,33 @@ app.use("*", async (c, next) => {
 
 const DEFAULT_CALLBACK_URL = `${env.CORS_ORIGIN}/`;
 
+// The final redirect after either auth flow completes happens from *this*
+// server's own response (api.viraltiktokslideshows.com), not from whatever
+// page the browser was last on -- so callbackURL must always be a
+// fully-qualified URL on the web app's own origin. A bare path like
+// "/dashboard" would otherwise resolve against this server's origin
+// instead and strand the user on the API domain. This also doubles as an
+// open-redirect guard: a callbackURL pointing at any origin other than
+// CORS_ORIGIN is rejected in favor of the default, rather than honored.
+function sanitizeCallbackURL(candidate: string | null | undefined): string {
+  if (!candidate) return DEFAULT_CALLBACK_URL;
+  try {
+    const url = new URL(candidate);
+    const allowed = new URL(env.CORS_ORIGIN);
+    return url.origin === allowed.origin ? url.toString() : DEFAULT_CALLBACK_URL;
+  } catch {
+    // Not a parseable absolute URL (e.g. a bare "/dashboard" path) -- the
+    // web app should always resolve these to absolute before they reach
+    // here (see apps/web/src/lib/site-url.ts), but fall back safely if one
+    // slips through.
+    return DEFAULT_CALLBACK_URL;
+  }
+}
+
 // --- Google OAuth (via arctic) ---
 
 app.get("/api/auth/google", async (c) => {
-  const callbackURL = c.req.query("callbackURL") || DEFAULT_CALLBACK_URL;
+  const callbackURL = sanitizeCallbackURL(c.req.query("callbackURL"));
   const state = arctic.generateState();
   const codeVerifier = arctic.generateCodeVerifier();
 
@@ -127,7 +150,7 @@ app.get("/api/auth/google/callback", async (c) => {
 app.post("/api/auth/magic-link", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
-  const callbackURL = typeof body?.callbackURL === "string" ? body.callbackURL : DEFAULT_CALLBACK_URL;
+  const callbackURL = sanitizeCallbackURL(typeof body?.callbackURL === "string" ? body.callbackURL : null);
 
   if (!email || !email.includes("@")) {
     return c.json({ error: "A valid email is required" }, 400);
@@ -158,7 +181,7 @@ app.post("/api/auth/magic-link", async (c) => {
 
 app.get("/api/auth/magic-link/callback", async (c) => {
   const token = c.req.query("token");
-  const callbackURL = c.req.query("callbackURL") || DEFAULT_CALLBACK_URL;
+  const callbackURL = sanitizeCallbackURL(c.req.query("callbackURL"));
 
   if (!token) {
     return c.redirect(`${env.CORS_ORIGIN}/auth/error?reason=missing_token`);
