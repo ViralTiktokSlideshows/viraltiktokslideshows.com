@@ -34,48 +34,77 @@ function hashToken(token: string): string {
 }
 
 // Brand tokens, matching packages/ui/src/styles/globals.css (--void, --bone)
-// and the accent used on primary buttons across the app. Email clients
-// strip external stylesheets and custom @font-face is unreliable, so these
-// are inlined and the font stack falls back to system UI fonts rather than
-// Clash Display.
+// and the accent used on primary buttons across the app.
 const VOID = "#110f0d";
 const BONE = "#f5efe4";
 const MUTED = "#948c7e";
 const ACCENT = "#ffb020";
-const LOGO_URL = `${env.CORS_ORIGIN}/logo-mark.png`;
+
+// Emails always link to the real production site for assets, never
+// env.CORS_ORIGIN -- that's correct for building in-app redirect URLs, but
+// in local dev it's http://localhost:3001, which no email client can ever
+// reach to fetch an <img>. The logo needs to resolve for every recipient
+// regardless of which environment triggered the send.
+const SITE_URL = "https://viraltiktokslideshows.com";
+const LOGO_URL = `${SITE_URL}/logo-mark.png`;
+
+// Font stack: Inter (body) / a heavier Inter weight standing in for Clash
+// Display (headings) -- matches packages/ui/src/styles/globals.css's
+// --font-sans/--font-display pairing as closely as email clients allow.
+// Custom @font-face and self-hosted webfonts are unreliable across email
+// clients (Outlook's Word rendering engine strips them entirely), so this
+// leans on "Inter" as a *preference* with solid system fallbacks -- most
+// recipients get system UI fonts, which is the standard, expected
+// tradeoff for HTML email.
+const FONT_BODY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+const FONT_DISPLAY = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
 
 function renderMagicLinkEmail(url: string) {
   const text = `Sign in to Viral TikTok Slideshows\n\n${url}\n\nThis link expires in 15 minutes and can only be used once. If you didn't request it, you can ignore this email.`;
   const html = `
-    <div style="background:${BONE};padding:32px 16px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;">
-      <table role="presentation" width="100%" style="max-width:420px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;">
+    <div style="background:${BONE};padding:32px 16px;font-family:${FONT_BODY};">
+      <table role="presentation" width="100%" style="max-width:440px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;border:1px solid #ece5d6;">
         <tr>
-          <td style="padding:32px 28px 24px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
-              <img
-                src="${LOGO_URL}"
-                width="28"
-                height="28"
-                alt="Viral TikTok Slideshows"
-                style="display:block;width:28px;height:28px;border-radius:8px;"
-              />
-              <span style="font-weight:700;font-size:15px;color:${VOID};vertical-align:middle;">Viral Tiktok Slideshows</span>
-            </div>
-            <h1 style="font-size:20px;font-weight:700;color:${VOID};margin:0 0 12px;">Sign in to your account</h1>
-            <p style="font-size:14px;line-height:1.6;color:${MUTED};margin:0 0 24px;">
+          <td style="background:${VOID};padding:28px 28px;">
+            <table role="presentation" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="vertical-align:middle;padding-right:12px;">
+                  <img
+                    src="${LOGO_URL}"
+                    width="36"
+                    height="36"
+                    alt="Viral TikTok Slideshows"
+                    style="display:block;width:36px;height:36px;border-radius:10px;"
+                  />
+                </td>
+                <td style="vertical-align:middle;">
+                  <span style="font-family:${FONT_DISPLAY};font-weight:800;font-size:16px;letter-spacing:-0.01em;color:${BONE};">
+                    Viral Tiktok Slideshows
+                  </span>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px 28px 28px;">
+            <h1 style="font-family:${FONT_DISPLAY};font-size:22px;font-weight:800;letter-spacing:-0.01em;color:${VOID};margin:0 0 12px;">
+              Sign in to your account
+            </h1>
+            <p style="font-family:${FONT_BODY};font-size:14px;line-height:1.6;color:${MUTED};margin:0 0 26px;">
               Click the button below to sign in. This link expires in 15 minutes and can only be used once.
             </p>
-            <a href="${url}" style="display:inline-block;background:${ACCENT};color:${VOID};font-weight:600;font-size:14px;text-decoration:none;padding:12px 24px;border-radius:16px;">
+            <a href="${url}" style="display:inline-block;background:${ACCENT};color:${VOID};font-family:${FONT_DISPLAY};font-weight:700;font-size:14px;text-decoration:none;padding:13px 26px;border-radius:16px;">
               Sign in
             </a>
-            <p style="font-size:12px;line-height:1.6;color:${MUTED};margin:24px 0 0;">
+            <p style="font-family:${FONT_BODY};font-size:12px;line-height:1.6;color:${MUTED};margin:26px 0 0;">
               Didn't request this? You can safely ignore this email.
             </p>
           </td>
         </tr>
         <tr>
           <td style="padding:16px 28px;border-top:1px solid #f0ebe0;">
-            <p style="font-size:11px;line-height:1.6;color:${MUTED};margin:0;">
+            <p style="font-family:${FONT_BODY};font-size:11px;line-height:1.6;color:${MUTED};margin:0;">
               Viral TikTok Slideshows &middot; viraltiktokslideshows.com
             </p>
           </td>
