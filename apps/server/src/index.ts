@@ -489,8 +489,38 @@ app.get("/api/purchases", async (c) => {
       slides: p.slides,
       status: p.status,
       createdAt: p.createdAt,
+      saved: p.saved,
+      format: p.format,
     })),
   });
+});
+
+// Stars/unstars a purchase for /dashboard/saved — deliberately not
+// status-gated (unlike download): someone can star a PENDING or FAILED
+// attempt's idea to come back to, not just a PAID one.
+app.patch("/api/purchases/:id", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+
+  const purchaseId = c.req.param("id");
+  const body = await c.req.json().catch(() => ({}));
+  if (typeof body?.saved !== "boolean") {
+    return c.json({ error: "saved must be a boolean" }, 400);
+  }
+
+  const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase || purchase.userId !== user.id) {
+    return c.json({ error: "Purchase not found" }, 404);
+  }
+
+  const updated = await prisma.purchase.update({
+    where: { id: purchaseId },
+    data: { saved: body.saved },
+  });
+
+  return c.json({ id: updated.id, saved: updated.saved });
 });
 
 // Real slide download (#2 from the loose-ends list) — fetches each
