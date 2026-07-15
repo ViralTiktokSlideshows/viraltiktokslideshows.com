@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 
 // Absolute origin for *this* request, derived from the incoming Host header
-// rather than a hardcoded domain — correct whether this is running on
+// rather than a hardcoded domain -- correct whether this is running on
 // localhost:3001 during local dev or behind Coolify's reverse proxy in
 // production, with no separate env var to keep in sync across
 // environments. Only usable from Server Components/Route Handlers (needs
@@ -17,16 +17,25 @@ export async function getRequestOrigin(): Promise<string> {
 // redirect to `/signup?callbackURL=/dashboard`) or already absolute, always
 // returning a fully-qualified URL. Needed because the eventual redirect
 // back to the app happens from apps/server's response, not this page's own
-// origin — a relative path would resolve against api.viraltiktokslideshows.com
+// origin -- a relative path would resolve against api.viraltiktokslideshows.com
 // instead of the web app and strand the user there. See also
 // apps/server/src/index.ts's sanitizeCallbackURL, which enforces the same
 // rule server-side as a backstop.
-export async function resolveCallbackURL(candidate: string | undefined): Promise<string> {
+//
+// `fallbackPath` is what to send the user to when no candidate callbackURL
+// was supplied at all (a plain visit to /signup with no query param) --
+// callers pick whatever makes sense for that entry point (e.g. "/generate"
+// for the header's plain "Sign in" link) instead of this helper hardcoding
+// one destination for every caller.
+export async function resolveCallbackURL(
+  candidate: string | undefined,
+  fallbackPath = "/",
+): Promise<string> {
   const origin = await getRequestOrigin();
-  if (!candidate) return `${origin}/`;
+  if (!candidate) return `${origin}${fallbackPath}`;
   try {
     return new URL(candidate, origin).toString();
   } catch {
-    return `${origin}/`;
+    return `${origin}${fallbackPath}`;
   }
 }

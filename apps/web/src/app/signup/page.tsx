@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   title: "Sign Up",
   description: "Create a free account to save your slideshows and generate more.",
   // No unique content beyond auth buttons, and /generate is already the
-  // indexed, free-to-try conversion entry point — avoid a thin duplicate.
+  // indexed, free-to-try conversion entry point -- avoid a thin duplicate.
   robots: { index: false, follow: true },
 };
 
@@ -25,11 +25,14 @@ export default async function SignUpPage({
 }) {
   const params = await searchParams;
   // Must always come out fully-qualified (https://viraltiktokslideshows.com/...,
-  // or http://localhost:3001/... in dev) — never a bare path. The server
+  // or http://localhost:3001/... in dev) -- never a bare path. The server
   // redirects back to this URL from its own response after auth completes,
   // so a relative path would resolve against api.viraltiktokslideshows.com
-  // instead of the web app.
-  const callbackURL = await resolveCallbackURL(params.callbackURL);
+  // instead of the web app. When nothing more specific was requested (e.g.
+  // the header's plain "Sign in" link, with no callbackURL param), land the
+  // user on /generate -- the actual product -- rather than back on the
+  // marketing homepage they just left.
+  const callbackURL = await resolveCallbackURL(params.callbackURL, "/generate");
 
   return (
     <AuthSplitShell

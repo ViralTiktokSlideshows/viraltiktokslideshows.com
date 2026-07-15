@@ -64,7 +64,7 @@ app.use("*", async (c, next) => {
   await next();
 });
 
-const DEFAULT_CALLBACK_URL = `${env.CORS_ORIGIN}/`;
+const DEFAULT_CALLBACK_URL = `${env.CORS_ORIGIN}/generate`;
 
 // The final redirect after either auth flow completes happens from *this*
 // server's own response (api.viraltiktokslideshows.com), not from whatever
