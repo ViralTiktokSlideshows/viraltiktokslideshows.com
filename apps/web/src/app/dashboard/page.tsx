@@ -9,7 +9,7 @@ import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { EmptyIllustration } from "@/components/dashboard/empty-illustration";
 import { SlideshowCard } from "@/components/dashboard/slideshow-card";
 import { Reveal } from "@/components/reveal";
-import { fetchPurchases, type PurchaseSummary } from "@/lib/purchases-client";
+import { fetchPurchases, toggleSaved, type PurchaseSummary } from "@/lib/purchases-client";
 
 export default function DashboardPage() {
   const [purchases, setPurchases] = useState<PurchaseSummary[] | null>(null);
@@ -17,6 +17,15 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchPurchases().then(setPurchases);
   }, []);
+
+  // Optimistic — flips immediately, and quietly reverts if the request
+  // fails (rare, and not worth a toast for a bookmark toggle).
+  function handleToggleSaved(id: string, saved: boolean) {
+    setPurchases((prev) => prev?.map((p) => (p.id === id ? { ...p, saved } : p)) ?? prev);
+    toggleSaved(id, saved).catch(() => {
+      setPurchases((prev) => prev?.map((p) => (p.id === id ? { ...p, saved: !saved } : p)) ?? prev);
+    });
+  }
 
   // While anything is still confirming payment, poll so it flips to
   // Paid/Failed live instead of requiring a manual refresh.
@@ -68,7 +77,7 @@ export default function DashboardPage() {
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {purchases.map((purchase, index) => (
             <Reveal key={purchase.id} delay={Math.min(index, 5) * 60}>
-              <SlideshowCard purchase={purchase} />
+              <SlideshowCard purchase={purchase} onToggleSaved={handleToggleSaved} />
             </Reveal>
           ))}
         </div>

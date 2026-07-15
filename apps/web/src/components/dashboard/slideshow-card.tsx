@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, RotateCw } from "lucide-react";
+import { Loader2, RotateCw, Star } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
@@ -18,7 +18,13 @@ const STATUS_CONFIG = {
   CANCELED: { badge: "Canceled", badgeClass: "bg-destructive/10 text-destructive" },
 } as const;
 
-export function SlideshowCard({ purchase }: { purchase: PurchaseSummary }) {
+export function SlideshowCard({
+  purchase,
+  onToggleSaved,
+}: {
+  purchase: PurchaseSummary;
+  onToggleSaved?: (id: string, saved: boolean) => void;
+}) {
   const title = purchase.slides[0]?.text || purchase.idea || "Untitled slideshow";
   const config = STATUS_CONFIG[purchase.status];
   const relative = purchase.createdAt ? formatRelativeTime(purchase.createdAt) : "";
@@ -46,6 +52,22 @@ export function SlideshowCard({ purchase }: { purchase: PurchaseSummary }) {
         >
           {config.badge}
         </span>
+        {onToggleSaved ? (
+          <button
+            type="button"
+            aria-label={purchase.saved ? "Unsave this slideshow" : "Save this slideshow"}
+            aria-pressed={purchase.saved}
+            onClick={() => onToggleSaved(purchase.id, !purchase.saved)}
+            className={cn(
+              "absolute top-2.5 left-2.5 flex size-7 items-center justify-center rounded-2xl shadow-sm transition-transform hover:scale-105",
+              purchase.saved
+                ? "bg-spark text-primary-foreground"
+                : "bg-background/90 text-muted-foreground backdrop-blur hover:text-foreground",
+            )}
+          >
+            <Star className={cn("size-3.5", purchase.saved && "fill-current")} />
+          </button>
+        ) : null}
       </div>
 
       <div className="flex flex-1 flex-col gap-3 p-4">
