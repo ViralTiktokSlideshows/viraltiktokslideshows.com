@@ -2,6 +2,7 @@
 
 import { env } from "@viraltiktokslideshows/env/web";
 
+import { authedFetch } from "./api-fetch";
 import type { PlanTier, PlanUsage } from "./auth-client";
 
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
@@ -23,15 +24,12 @@ export type UserSettings = {
   plan: PlanUsage | null;
 };
 
+// Every endpoint below requires a signed-in session (see the "Not
+// authenticated" 401 checks in apps/server/src/index.ts) -- authedFetch
+// redirects to /signup automatically if the session cookie is missing or
+// expired, so callers here only need to handle real application errors.
 async function apiFetch(path: string, init?: RequestInit) {
-  return fetch(`${SERVER_URL}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
-  });
+  return authedFetch(`${SERVER_URL}${path}`, init);
 }
 
 export async function fetchSettings(): Promise<UserSettings | null> {

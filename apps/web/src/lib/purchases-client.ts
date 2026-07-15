@@ -2,6 +2,8 @@
 
 import { env } from "@viraltiktokslideshows/env/web";
 
+import { authedFetch } from "./api-fetch";
+
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 
 export type PurchaseStatus = "PENDING" | "PAID" | "FAILED" | "CANCELED";
@@ -18,7 +20,7 @@ export type PurchaseSummary = {
 };
 
 export async function fetchPurchases(): Promise<PurchaseSummary[]> {
-  const res = await fetch(`${SERVER_URL}/api/purchases`, { credentials: "include" });
+  const res = await authedFetch(`${SERVER_URL}/api/purchases`);
   if (!res.ok) return [];
   const data = await res.json();
   return Array.isArray(data?.purchases) ? data.purchases : [];
@@ -27,10 +29,8 @@ export async function fetchPurchases(): Promise<PurchaseSummary[]> {
 // Stars/unstars a purchase for /dashboard/saved. Returns the new saved
 // state on success so callers can reconcile optimistic UI if needed.
 export async function toggleSaved(purchaseId: string, saved: boolean): Promise<boolean> {
-  const res = await fetch(`${SERVER_URL}/api/purchases/${purchaseId}`, {
+  const res = await authedFetch(`${SERVER_URL}/api/purchases/${purchaseId}`, {
     method: "PATCH",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ saved }),
   });
   if (!res.ok) throw new Error("Could not update this slideshow.");
@@ -38,6 +38,11 @@ export async function toggleSaved(purchaseId: string, saved: boolean): Promise<b
   return Boolean(data?.saved);
 }
 
+// Deliberately NOT authedFetch -- /api/checkout/status is reachable by a
+// signed-out visitor right after the Dodo redirect lands (session cookie
+// might not have caught up yet), and the server itself only enforces
+// ownership when a session *is* present. Redirecting to sign-in here would
+// break that polling for the exact visitors it's meant to support.
 export async function fetchPurchase(id: string): Promise<PurchaseSummary | null> {
   const res = await fetch(`${SERVER_URL}/api/checkout/status?purchase=${id}`, {
     credentials: "include",
@@ -52,9 +57,7 @@ export async function fetchPurchase(id: string): Promise<PurchaseSummary | null>
 // GET /api/purchases/:id/download), so this is just triggering a browser
 // save on whatever comes back, not building anything client-side.
 export async function downloadPurchaseZip(purchaseId: string): Promise<void> {
-  const res = await fetch(`${SERVER_URL}/api/purchases/${purchaseId}/download`, {
-    credentials: "include",
-  });
+  const res = await authedFetch(`${SERVER_URL}/api/purchases/${purchaseId}/download`);
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));

@@ -2,6 +2,8 @@
 
 import { env } from "@viraltiktokslideshows/env/web";
 
+import { authedFetch } from "./api-fetch";
+
 // Thin client for the checkout endpoints on apps/server, plus a small
 // sessionStorage-backed handoff so a not-yet-signed-in user can bounce
 // through /generate/checkout and come straight back to paying once they've
@@ -35,10 +37,8 @@ export type PendingCheckout = PendingSlideshow & { idempotencyKey: string };
 export async function createCheckoutSession(
   data: PendingCheckout,
 ): Promise<{ checkoutUrl: string; purchaseId: string }> {
-  const res = await fetch(`${SERVER_URL}/api/checkout/create`, {
+  const res = await authedFetch(`${SERVER_URL}/api/checkout/create`, {
     method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
 
