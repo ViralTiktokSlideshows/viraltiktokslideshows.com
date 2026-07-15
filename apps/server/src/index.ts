@@ -513,12 +513,4 @@ app.post("/api/webhooks/dodo", async (c) => {
       },
     });
   } else if (type === "payment.failed") {
-    await prisma.purchase.update({ where: { id: purchaseId }, data: { status: "FAILED" } });
-  } else if (type === "payment.cancelled") {
-    await prisma.purchase.update({ where: { id: purchaseId }, data: { status: "CANCELED" } });
-  }
-
-  return c.json({ received: true });
-});
-
-export default app;
+    await prisma.purchase.update({ where: { id: purchaseId }, data: { 

@@ -110,15 +110,4 @@ function parseSlidesJson(raw: string): string[] | null {
 
   try {
     const parsed = JSON.parse(text);
-    const slides = parsed?.slides;
-    if (!Array.isArray(slides)) return null;
-
-    const cleaned = slides
-      .map((s) => (typeof s === "string" ? s.trim() : ""))
-      .filter((s) => s.length > 0);
-
-    return cleaned.length > 0 ? cleaned : null;
-  } catch {
-    return null;
-  }
-}
+    const slides = parsed?.

@@ -41,11 +41,4 @@ export async function generateSlideshow(idea: string): Promise<GeneratedSlidesho
 export async function fillRemainingSlideImages(
   slides: GeneratedSlide[],
 ): Promise<GeneratedSlide[]> {
-  const missing = slides.filter((slide) => !slide.imageUrl);
-  if (missing.length === 0) return slides;
-
-  const images = await generateSlideImages(missing);
-  return slides.map((slide) =>
-    images.has(slide.index) ? { ...slide, imageUrl: images.get(slide.index) } : slide,
-  );
-}
+  const missing = 
