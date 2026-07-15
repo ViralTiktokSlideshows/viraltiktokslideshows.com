@@ -205,6 +205,87 @@ app.post("/api/auth/sign-out", async (c) => {
   return c.json({ success: true });
 });
 
+// --- Settings ---
+
+const SLIDE_FORMATS = ["STORYTIME", "LISTICLE", "HOT_TAKE"] as const;
+
+app.get("/api/settings", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  return c.json({
+    name: user.name,
+    email: user.email,
+    image: user.image,
+    hasGoogle: Boolean(user.googleId),
+    defaultFormat: user.defaultFormat,
+    autoAppendHashtags: user.autoAppendHashtags,
+  });
+});
+
+// Partial update — only the fields the caller actually sends are touched, so
+// the Settings page can fire one PATCH per control (name edit, format
+// switch, hashtag toggle) without clobbering the others.
+app.patch("/api/settings", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  const body = await c.req.json().catch(() => ({}));
+  const data: {
+    name?: string;
+    defaultFormat?: (typeof SLIDE_FORMATS)[number];
+    autoAppendHashtags?: boolean;
+  } = {};
+
+  if (typeof body?.name === "string") {
+    const trimmed = body.name.trim();
+    if (trimmed.length === 0 || trimmed.length > 80) {
+      return c.json({ error: "Name must be 1-80 characters" }, 400);
+    }
+    data.name = trimmed;
+  }
+
+  if (body?.defaultFormat !== undefined) {
+    if (!SLIDE_FORMATS.includes(body.defaultFormat)) {
+      return c.json({ error: "Invalid format" }, 400);
+    }
+    data.defaultFormat = body.defaultFormat;
+  }
+
+  if (body?.autoAppendHashtags !== undefined) {
+    if (typeof body.autoAppendHashtags !== "boolean") {
+      return c.json({ error: "autoAppendHashtags must be a boolean" }, 400);
+    }
+    data.autoAppendHashtags = body.autoAppendHashtags;
+  }
+
+  const updated = await prisma.user.update({ where: { id: user.id }, data });
+
+  return c.json({
+    name: updated.name,
+    email: updated.email,
+    image: updated.image,
+    hasGoogle: Boolean(updated.googleId),
+    defaultFormat: updated.defaultFormat,
+    autoAppendHashtags: updated.autoAppendHashtags,
+  });
+});
+
+// Cascades to sessions and purchases (see schema.prisma onDelete: Cascade) —
+// this is a genuine, irreversible account delete, not a soft-disable.
+app.delete("/api/account", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  await prisma.user.delete({ where: { id: user.id } });
+
+  const token = getSessionCookie(c);
+  if (token) await invalidateSessionToken(token).catch(() => {});
+  clearSessionCookie(c);
+
+  return c.json({ success: true });
+});
+
 app.get("/", (c) => {
   return c.text("OK");
 });
@@ -513,4 +594,12 @@ app.post("/api/webhooks/dodo", async (c) => {
       },
     });
   } else if (type === "payment.failed") {
-    await prisma.purchase.update({ where: { id: purchaseId }, data: { 
+    await prisma.purchase.update({ where: { id: purchaseId }, data: { status: "FAILED" } });
+  } else if (type === "payment.cancelled") {
+    await prisma.purchase.update({ where: { id: purchaseId }, data: { status: "CANCELED" } });
+  }
+
+  return c.json({ received: true });
+});
+
+export default app;
