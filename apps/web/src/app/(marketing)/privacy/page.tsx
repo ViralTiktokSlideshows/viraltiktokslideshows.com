@@ -87,13 +87,4 @@ export default function PrivacyPage() {
       <div className="mt-10 flex flex-col gap-8">
         {SECTIONS.map((section) => (
           <section key={section.title}>
-            <h2 className="font-display text-lg font-bold text-foreground">{section.title}</h2>
-            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
-              {section.body}
-            </p>
-          </section>
-        ))}
-      </div>
-    </main>
-  );
-}
+            <h2 className="font-display text-lg font-bold text-foreground">{section.title}</h2
