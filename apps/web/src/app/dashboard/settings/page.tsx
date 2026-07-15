@@ -10,7 +10,4 @@ export default function SettingsPage() {
     <ComingSoon
       icon={Settings}
       title="Settings is coming soon"
-      description="Account details, email preferences, and billing history will live here."
-    />
-  );
-}
+      desc

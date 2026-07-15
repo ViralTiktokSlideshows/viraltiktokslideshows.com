@@ -64,17 +64,4 @@ export default function UpgradePage() {
               title="Subscriptions aren't set up yet — email us if you want in early"
             >
               Upgrade to Agency
-            </Button>
-          </div>
-        </div>
-
-        <p className="mt-6 text-xs text-muted-foreground">
-          Just need this one?{" "}
-          <Link href="/generate" className="text-riot hover:underline">
-            Generate a slideshow — $2 to unlock
-          </Link>
-        </p>
-      </div>
-    </GenerateShell>
-  );
-}
+         

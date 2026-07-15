@@ -10,7 +10,4 @@ export default function SavedPage() {
     <ComingSoon
       icon={Bookmark}
       title="Saved is coming soon"
-      description="Bookmark slideshows you want to revisit — this is on the way."
-    />
-  );
-}
+     

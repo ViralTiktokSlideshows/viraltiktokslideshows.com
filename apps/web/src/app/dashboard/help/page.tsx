@@ -10,7 +10,4 @@ export default function HelpPage() {
     <ComingSoon
       icon={HelpCircle}
       title="Help & support is coming soon"
-      description="For now, email support@viraltiktokslideshows.com and we'll get back to you."
-    />
-  );
-}
+      de
