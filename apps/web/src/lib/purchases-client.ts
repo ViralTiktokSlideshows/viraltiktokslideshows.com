@@ -7,6 +7,7 @@ import { env } from "@viraltiktokslideshows/env/web";
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 
 export type PurchaseStatus = "PENDING" | "PAID" | "FAILED" | "CANCELED";
+export type SlideFormat = "STORYTIME" | "LISTICLE" | "HOT_TAKE";
 
 export type PurchaseSummary = {
   id: string;
@@ -14,6 +15,8 @@ export type PurchaseSummary = {
   slides: { index: number; text: string; imageUrl?: string }[];
   status: PurchaseStatus;
   createdAt: string;
+  saved?: boolean;
+  format?: SlideFormat | null;
 };
 
 export async function fetchPurchases(): Promise<PurchaseSummary[]> {
@@ -21,6 +24,20 @@ export async function fetchPurchases(): Promise<PurchaseSummary[]> {
   if (!res.ok) return [];
   const data = await res.json();
   return Array.isArray(data?.purchases) ? data.purchases : [];
+}
+
+// Stars/unstars a purchase for /dashboard/saved. Returns the new saved
+// state on success so callers can reconcile optimistic UI if needed.
+export async function toggleSaved(purchaseId: string, saved: boolean): Promise<boolean> {
+  const res = await fetch(`${SERVER_URL}/api/purchases/${purchaseId}`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ saved }),
+  });
+  if (!res.ok) throw new Error("Could not update this slideshow.");
+  const data = await res.json();
+  return Boolean(data?.saved);
 }
 
 export async function fetchPurchase(id: string): Promise<PurchaseSummary | null> {
