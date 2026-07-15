@@ -1,24 +1,62 @@
-import { Zap } from "lucide-react";
-import type { Metadata } from "next";
+"use client";
+
+import { Loader2, Zap } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
 import { GenerateShell } from "@/components/dashboard/generate-shell";
+import { type PlanTier, useSession } from "@/lib/auth-client";
+import { subscribeToPlan } from "@/lib/settings-client";
 
-// Reached mid-flow, not a primary landing destination, and its pricing
-// content overlaps the homepage's Pricing section — noindex to avoid
-// diluting authority with a thin/duplicate page.
-export const metadata: Metadata = {
-  title: "Upgrade",
-  robots: { index: false, follow: true },
-};
-
-// Visual only for now: there's no Dodo subscription product or credits
-// backend behind these plans yet, so the monthly tiers are intentionally
-// disabled rather than faking a checkout. The $2 single-slideshow link at
-// the bottom is real — it's the same unlock flow already wired end to end.
+// Real subscription checkout now that Dodo's subscription products exist
+// (see /api/billing/subscribe) — signed-in users go straight to a Dodo
+// checkout session; signed-out visitors are sent to sign in first with the
+// chosen tier carried in the callback URL's ?tier= param, then this page
+// auto-resumes the same checkout the moment it re-mounts signed in. Mirrors
+// the pattern reveal-step.tsx uses for the $2 unlock, just without needing
+// to stash any slideshow data — there's nothing to remember but the tier.
 export default function UpgradePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, isPending } = useSession();
+  const [loadingTier, setLoadingTier] = useState<PlanTier | null>(null);
+  const [error, setError] = useState("");
+  const resumedRef = useRef(false);
+
+  async function handleUpgrade(tier: PlanTier) {
+    setError("");
+
+    if (!user) {
+      const callbackURL = `/generate/upgrade?tier=${tier}`;
+      router.push(`/signup?callbackURL=${encodeURIComponent(callbackURL)}`);
+      return;
+    }
+
+    setLoadingTier(tier);
+    try {
+      await subscribeToPlan(tier);
+    } catch (err) {
+      setLoadingTier(null);
+      setError(err instanceof Error ? err.message : "Could not start checkout. Try again.");
+    }
+  }
+
+  // Resume: if we landed here with ?tier= (bounced back from sign-in) and
+  // we're now signed in, finish the checkout automatically instead of
+  // making them click the button again.
+  useEffect(() => {
+    if (resumedRef.current || isPending || !user) return;
+    const tier = searchParams.get("tier");
+    if (tier === "CREATOR" || tier === "PRO" || tier === "AGENCY") {
+      resumedRef.current = true;
+      handleUpgrade(tier);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPending, user, searchParams]);
+
   return (
     <GenerateShell>
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-16 text-center sm:px-6">
@@ -44,9 +82,12 @@ export default function UpgradePage() {
             <p className="mt-1 text-xs text-bone/60">60 slideshows / month</p>
             <Button
               className="mt-4 w-full justify-center"
-              disabled
-              title="Subscriptions aren't set up yet — email us if you want in early"
+              disabled={loadingTier !== null}
+              onClick={() => handleUpgrade("PRO")}
             >
+              {loadingTier === "PRO" ? (
+                <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+              ) : null}
               Upgrade to Pro
             </Button>
           </div>
@@ -60,13 +101,18 @@ export default function UpgradePage() {
             <Button
               variant="outline"
               className="mt-4 w-full justify-center"
-              disabled
-              title="Subscriptions aren't set up yet — email us if you want in early"
+              disabled={loadingTier !== null}
+              onClick={() => handleUpgrade("AGENCY")}
             >
+              {loadingTier === "AGENCY" ? (
+                <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+              ) : null}
               Upgrade to Agency
             </Button>
           </div>
         </div>
+
+        {error ? <p className="mt-4 text-xs text-destructive">{error}</p> : null}
 
         <p className="mt-6 text-xs text-muted-foreground">
           Just need this one?{" "}

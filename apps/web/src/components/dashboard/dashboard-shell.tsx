@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { useSession } from "@/lib/auth-client";
-import { useMonthlyUsage } from "@/lib/purchases-client";
 
 import { AppFrame } from "./app-frame";
 import { Sidebar } from "./sidebar";
@@ -17,7 +16,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isPending } = useSession();
-  const usage = useMonthlyUsage();
 
   useEffect(() => {
     if (!isPending && !user) {
@@ -34,14 +32,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppFrame
-      sidebar={
-        <Sidebar
-          variant="expanded"
-          usage={{ used: usage.used, cap: usage.cap, label: "Free plan" }}
-        />
-      }
-    >
+    <AppFrame sidebar={<Sidebar variant="expanded" usage={user.plan} />}>
       {children}
     </AppFrame>
   );

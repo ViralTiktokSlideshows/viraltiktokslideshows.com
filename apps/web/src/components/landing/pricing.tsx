@@ -4,8 +4,11 @@ import { Button } from "@viraltiktokslideshows/ui/components/button";
 
 import { Reveal } from "@/components/reveal";
 
+import { PlanCTA } from "./plan-cta";
+
 const PLANS = [
   {
+    tier: "CREATOR",
     name: "Creator",
     price: "$19.99",
     quota: "20 slideshows per month.",
@@ -13,6 +16,7 @@ const PLANS = [
     featured: false,
   },
   {
+    tier: "PRO",
     name: "Pro",
     price: "$59.99",
     quota: "60 slideshows per month.",
@@ -20,6 +24,7 @@ const PLANS = [
     featured: true,
   },
   {
+    tier: "AGENCY",
     name: "Agency",
     price: "$199.99",
     quota: "200 slideshows per month.",
@@ -130,6 +135,7 @@ export function Pricing() {
                   {plan.note}
                 </p>
               </div>
+              <PlanCTA tier={plan.tier} featured={plan.featured} />
             </Reveal>
           ))}
         </div>

@@ -25,7 +25,7 @@ import {
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
 import { BrandMark } from "@/components/brand-mark";
-import { signOut, useSession } from "@/lib/auth-client";
+import { type PlanUsage, signOut, useSession } from "@/lib/auth-client";
 
 const NAV_ITEMS = [
   { href: "/generate", label: "Generate", icon: Plus },
@@ -124,7 +124,11 @@ function SidebarContent({
   onNavigate,
 }: {
   compact: boolean;
-  usage?: { used: number; cap: number; label: string } | null;
+  // undefined = session/plan still loading (render nothing, matches the
+  // isPending pattern below); null = confirmed no active plan (show the
+  // "No plan" upgrade card, per the requirement that this never just be
+  // hidden); a real PlanUsage = active subscription progress bar.
+  usage?: PlanUsage | null;
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -186,31 +190,52 @@ function SidebarContent({
 
       <div className="flex-1" />
 
-      {!compact && usage ? (
-        <div className="rounded-2xl border border-border bg-background p-3">
-          <div className="flex items-center justify-between text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-            <span>{usage.label}</span>
-            <span>
-              {usage.used} / {usage.cap}
-            </span>
+      {!compact && usage !== undefined ? (
+        usage ? (
+          <div className="rounded-2xl border border-border bg-background p-3">
+            <div className="flex items-center justify-between text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+              <span>{usage.label}</span>
+              <span>
+                {usage.used} / {usage.cap}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-2xl bg-border">
+              <div
+                className="h-full rounded-2xl bg-spark transition-all duration-500 ease-out"
+                style={{ width: `${Math.min((usage.used / usage.cap) * 100, 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">Slideshows generated this month.</p>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-3 w-full justify-center gap-1.5 bg-accent text-accent-foreground hover:bg-accent/90"
+              nativeButton={false}
+              render={<Link href="/generate/upgrade" onClick={onNavigate} />}
+            >
+              Go unlimited
+            </Button>
           </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-2xl bg-border">
-            <div
-              className="h-full rounded-2xl bg-spark transition-all duration-500 ease-out"
-              style={{ width: `${Math.min((usage.used / usage.cap) * 100, 100)}%` }}
-            />
+        ) : (
+          <div className="rounded-2xl border border-border bg-background p-3">
+            <div className="flex items-center justify-between text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+              <span>No plan</span>
+              <span>0 left</span>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Subscribe for monthly slideshow generations.
+            </p>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="mt-3 w-full justify-center gap-1.5 bg-accent text-accent-foreground hover:bg-accent/90"
+              nativeButton={false}
+              render={<Link href="/generate/upgrade" onClick={onNavigate} />}
+            >
+              Choose a plan
+            </Button>
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">Slideshows generated this month.</p>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="mt-3 w-full justify-center gap-1.5 bg-accent text-accent-foreground hover:bg-accent/90"
-            nativeButton={false}
-            render={<Link href="/generate/upgrade" onClick={onNavigate} />}
-          >
-            Go unlimited
-          </Button>
-        </div>
+        )
       ) : null}
 
       {!isPending && user ? (
@@ -225,7 +250,7 @@ export function Sidebar({
   usage,
 }: {
   variant?: "expanded" | "compact";
-  usage?: { used: number; cap: number; label: string } | null;
+  usage?: PlanUsage | null;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const compact = variant === "compact";

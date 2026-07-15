@@ -7,7 +7,7 @@ import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { Textarea } from "@viraltiktokslideshows/ui/components/textarea";
 
 import { SlideDeck } from "@/components/landing/slide-deck";
-import { useMonthlyUsage } from "@/lib/purchases-client";
+import { useSession } from "@/lib/auth-client";
 
 export function IdeaStep({
   initialIdea,
@@ -17,7 +17,8 @@ export function IdeaStep({
   onSubmit: (idea: string) => void;
 }) {
   const [idea, setIdea] = useState(initialIdea);
-  const usage = useMonthlyUsage();
+  const { user } = useSession();
+  const plan = user?.plan;
 
   function handleSubmit(event?: React.FormEvent) {
     event?.preventDefault();
@@ -42,7 +43,9 @@ export function IdeaStep({
           New slideshow
         </h1>
         <span className="text-xs text-nowrap text-muted-foreground">
-          Free plan · {Math.max(usage.cap - usage.used, 0)} left this month
+          {plan
+            ? `${plan.label} · ${Math.max(plan.cap - plan.used, 0)} left this month`
+            : "$2 to unlock"}
         </span>
       </div>
 

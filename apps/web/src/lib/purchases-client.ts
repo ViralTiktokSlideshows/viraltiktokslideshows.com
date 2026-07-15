@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 import { env } from "@viraltiktokslideshows/env/web";
 
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
@@ -72,39 +70,6 @@ export async function downloadPurchaseZip(purchaseId: string): Promise<void> {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
-}
-
-// No real plan/subscription backend exists yet — this is a real count (of
-// this user's purchase attempts this calendar month) against a cosmetic
-// soft cap for display parity with the design. It doesn't gate anything;
-// see docs/dashboard-spec.md and the sidebar-improvements note about the
-// Pro-plan/credits model needing a real product decision before it's
-// actually enforced.
-const DISPLAY_CAP = 60;
-
-export function useMonthlyUsage() {
-  const [used, setUsed] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchPurchases()
-      .then((purchases) => {
-        if (cancelled) return;
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-        const count = purchases.filter((p) => new Date(p.createdAt) >= startOfMonth).length;
-        setUsed(count);
-      })
-      .catch(() => {
-        if (!cancelled) setUsed(0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { used: used ?? 0, cap: DISPLAY_CAP, isLoading: used === null };
 }
 
 export function formatRelativeTime(iso: string): string {
