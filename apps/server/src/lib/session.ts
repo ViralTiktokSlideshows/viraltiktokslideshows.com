@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import prisma from "@viraltiktokslideshows/db";
+import type { Session, User } from "@viraltiktokslideshows/db";
 import type { Context } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 
@@ -38,7 +39,12 @@ export async function createSession(
   return { token, session };
 }
 
-export async function validateSessionToken(token: string) {
+// Explicit return type — otherwise tsc can't emit a portable .d.ts for this
+// inferred type once it touches the generated Prisma User/SlideFormat enum
+// (TS2883).
+export async function validateSessionToken(
+  token: string,
+): Promise<{ session: Session | null; user: User | null }> {
   const tokenHash = hashToken(token);
   const session = await prisma.session.findUnique({
     where: { tokenHash },
