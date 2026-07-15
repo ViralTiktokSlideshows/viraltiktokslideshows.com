@@ -8,7 +8,11 @@ import { logger } from "hono/logger";
 import JSZip from "jszip";
 import { Webhook } from "standardwebhooks";
 
-import { createBillingPortalSession, createUnlockCheckoutSession } from "./lib/dodo";
+import {
+  createBillingPortalSession,
+  createPlanCheckoutSession,
+  createUnlockCheckoutSession,
+} from "./lib/dodo";
 import { fillRemainingSlideImages, generateSlideshow } from "./lib/generate-slideshow";
 import {
   clearOAuthStateCookie,
@@ -18,6 +22,7 @@ import {
   setOAuthStateCookie,
 } from "./lib/google-oauth";
 import { isMagicLinkRateLimited, sendMagicLinkEmail, verifyMagicLinkToken } from "./lib/magic-link";
+import { getPlanUsage, planTierForProductId, productIdForPlanTier } from "./lib/plans";
 import { getClientIp, isRateLimited } from "./lib/rate-limit";
 import { verifyTurnstileToken } from "./lib/turnstile";
 import {
@@ -89,6 +94,29 @@ function sanitizeCallbackURL(candidate: string | null | undefined): string {
   }
 }
 
+// First-time sign-ins (hasCompletedOnboarding still false) land on
+// /onboarding instead of wherever they were headed -- but only when the
+// destination was one of these generic, no-specific-intent entry points.
+// Deliberate destinations (DashboardShell sending someone back to the page
+// they were on, the checkout page's sign-in-and-pay step resuming an
+// in-progress $2 unlock) are never overridden -- interrupting an active
+// purchase with onboarding would be a genuine regression, not a feature.
+const GENERIC_ENTRY_PATHS = new Set(["/", "/generate"]);
+
+function applyOnboardingRedirect(callbackURL: string, user: { hasCompletedOnboarding: boolean }): string {
+  if (user.hasCompletedOnboarding) return callbackURL;
+  try {
+    const path = new URL(callbackURL).pathname;
+    if (GENERIC_ENTRY_PATHS.has(path)) {
+      return `${env.CORS_ORIGIN}/onboarding`;
+    }
+  } catch {
+    // Not a parseable URL -- leave it alone, sanitizeCallbackURL already
+    // guarantees callers only ever see fully-qualified values by this point.
+  }
+  return callbackURL;
+}
+
 // --- Google OAuth (via arctic) ---
 
 app.get("/api/auth/google", async (c) => {
@@ -138,7 +166,7 @@ app.get("/api/auth/google/callback", async (c) => {
     });
     setSessionCookie(c, token, session.expiresAt);
 
-    return c.redirect(stored.callbackURL);
+    return c.redirect(applyOnboardingRedirect(stored.callbackURL, user));
   } catch (error) {
     console.error("Google OAuth callback failed", error);
     return c.redirect(`${env.CORS_ORIGIN}/auth/error?reason=google_failed`);
@@ -203,7 +231,7 @@ app.get("/api/auth/magic-link/callback", async (c) => {
   });
   setSessionCookie(c, sessionToken, session.expiresAt);
 
-  return c.redirect(callbackURL);
+  return c.redirect(applyOnboardingRedirect(callbackURL, user));
 });
 
 // --- Session introspection + sign out ---
@@ -211,14 +239,33 @@ app.get("/api/auth/magic-link/callback", async (c) => {
 app.get("/api/auth/session", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ user: null });
+  const plan = await getPlanUsage(user);
   return c.json({
     user: {
       id: user.id,
       email: user.email,
       name: user.name,
       image: user.image,
+      hasCompletedOnboarding: user.hasCompletedOnboarding,
+      plan,
     },
   });
+});
+
+// Marks onboarding as done -- called by /onboarding's "Skip for now" link
+// and automatically once a first-time user starts generating from there.
+// Idempotent: signing in again after this never shows onboarding, no
+// matter how it was completed.
+app.post("/api/onboarding/complete", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { hasCompletedOnboarding: true },
+  });
+
+  return c.json({ success: true });
 });
 
 app.post("/api/auth/sign-out", async (c) => {
@@ -236,6 +283,8 @@ app.get("/api/settings", async (c) => {
   const user = c.get("user");
   if (!user) return c.json({ error: "Not authenticated" }, 401);
 
+  const plan = await getPlanUsage(user);
+
   return c.json({
     name: user.name,
     email: user.email,
@@ -244,6 +293,7 @@ app.get("/api/settings", async (c) => {
     defaultFormat: user.defaultFormat,
     autoAppendHashtags: user.autoAppendHashtags,
     hasBillingHistory: Boolean(user.dodoCustomerId),
+    plan,
   });
 });
 
@@ -284,6 +334,7 @@ app.patch("/api/settings", async (c) => {
   }
 
   const updated = await prisma.user.update({ where: { id: user.id }, data });
+  const plan = await getPlanUsage(updated);
 
   return c.json({
     name: updated.name,
@@ -293,6 +344,7 @@ app.patch("/api/settings", async (c) => {
     defaultFormat: updated.defaultFormat,
     autoAppendHashtags: updated.autoAppendHashtags,
     hasBillingHistory: Boolean(updated.dodoCustomerId),
+    plan,
   });
 });
 
@@ -335,6 +387,47 @@ app.post("/api/billing/portal", async (c) => {
   } catch (error) {
     console.error("Failed to create Dodo billing portal session", error);
     return c.json({ error: "Could not open billing portal. Try again." }, 502);
+  }
+});
+
+const PLAN_TIERS = ["CREATOR", "PRO", "AGENCY"] as const;
+
+// Starts a subscription checkout for one of the three plan tiers. Same
+// Checkout Sessions method as the $2 unlock (createUnlockCheckoutSession)
+// -- Dodo's own docs recommend it over the deprecated POST /subscriptions
+// endpoint -- just pointed at a recurring product id with userId in
+// metadata instead of purchaseId, so /api/webhooks/dodo's subscription.*
+// handling knows which User row to update once it fires.
+app.post("/api/billing/subscribe", async (c) => {
+  const user = c.get("user");
+  if (!user) return c.json({ error: "Not authenticated" }, 401);
+
+  const body = await c.req.json().catch(() => ({}));
+  const tier = body?.tier;
+  if (!PLAN_TIERS.includes(tier)) {
+    return c.json({ error: "Invalid plan" }, 400);
+  }
+
+  const productId = productIdForPlanTier(tier);
+  if (!productId) {
+    // The Dodo product for this tier hasn't been created/configured yet
+    // (see DODO_CREATOR_PRODUCT_ID etc. in packages/env) -- surface a
+    // clear, expected failure rather than a crash.
+    return c.json({ error: "This plan isn't available yet -- check back soon." }, 501);
+  }
+
+  try {
+    const session = await createPlanCheckoutSession({
+      userId: user.id,
+      productId,
+      customerEmail: user.email,
+      customerName: user.name || user.email,
+      returnUrl: `${env.CORS_ORIGIN}/dashboard/settings?subscribed=1`,
+    });
+    return c.json({ checkoutUrl: session.checkout_url });
+  } catch (error) {
+    console.error("Failed to create Dodo subscription checkout session", error);
+    return c.json({ error: "Could not start checkout. Try again." }, 502);
   }
 });
 
@@ -441,6 +534,51 @@ app.post("/api/checkout/create", async (c) => {
     enrichedSlides = await fillRemainingSlideImages(slides);
   } catch (error) {
     console.error("Failed to fill remaining slide images, continuing with what we have", error);
+  }
+
+  // Quota-first: an active plan with room left in the current billing
+  // period covers this generation for free, no Dodo checkout at all. The
+  // Purchase is created already PAID + includedInPlan, and the client is
+  // sent straight to the success page it already knows how to handle --
+  // both callers (reveal-step.tsx, generate/checkout/page.tsx) just do
+  // `window.location.href = checkoutUrl`, so a same-origin success URL
+  // here works exactly like a Dodo one would.
+  const planUsage = await getPlanUsage(user);
+  if (planUsage && planUsage.used < planUsage.cap) {
+    let planPurchase: Awaited<ReturnType<typeof prisma.purchase.create>>;
+    try {
+      planPurchase = await prisma.purchase.create({
+        data: {
+          userId: user.id,
+          idea,
+          formats,
+          vibes,
+          slides: enrichedSlides,
+          idempotencyKey: idempotencyKey ?? undefined,
+          format: user.defaultFormat,
+          status: "PAID",
+          includedInPlan: true,
+          amount: 0,
+        },
+      });
+    } catch (error) {
+      if (idempotencyKey) {
+        const existing = await prisma.purchase.findUnique({ where: { idempotencyKey } });
+        if (existing) {
+          return c.json({
+            checkoutUrl: `${env.CORS_ORIGIN}/generate/success?purchase=${existing.id}`,
+            purchaseId: existing.id,
+          });
+        }
+      }
+      console.error("Failed to create plan-covered purchase", error);
+      return c.json({ error: "Could not start checkout" }, 502);
+    }
+
+    return c.json({
+      checkoutUrl: `${env.CORS_ORIGIN}/generate/success?purchase=${planPurchase.id}`,
+      purchaseId: planPurchase.id,
+    });
   }
 
   let purchase: Awaited<ReturnType<typeof prisma.purchase.create>>;
@@ -673,8 +811,75 @@ app.post("/api/webhooks/dodo", async (c) => {
   }
 
   const payload = JSON.parse(rawBody);
-  const purchaseId: string | undefined = payload?.data?.metadata?.purchaseId ?? payload?.metadata?.purchaseId;
   const type: string | undefined = payload?.type;
+
+  // Subscription lifecycle events carry userId in metadata (see
+  // createPlanCheckoutSession in lib/dodo.ts), not purchaseId -- handled
+  // separately from the payment.*/purchaseId branch below. Event names and
+  // the data object's field names (subscription_id, product_id,
+  // customer.customer_id, previous_billing_date, next_billing_date) come
+  // from Dodo's Subscription Integration Guide -- like the payment.*
+  // handling below, these haven't been exercised against a live webhook
+  // from here, so double check field names once DODO_PAYMENTS_WEBHOOK_KEY
+  // is wired to a real account with an active subscription product.
+  //
+  // Known gap: Dodo doesn't document a dedicated "subscription.cancelled"
+  // event -- cancellation appears to surface via the generic
+  // "subscription.updated" event instead, which isn't handled here yet. In
+  // the meantime a cancelled plan simply stops renewing (no more
+  // subscription.renewed webhooks), so planPeriodEnd naturally caps access
+  // once the current period lapses -- degraded gracefully, just not
+  // reflected in the UI the instant someone cancels.
+  if (type?.startsWith("subscription.")) {
+    const data = payload?.data;
+    const dodoSubscriptionId: string | undefined = data?.subscription_id;
+    const dodoCustomerId: string | undefined = data?.customer?.customer_id;
+
+    if (type === "subscription.active" || type === "subscription.renewed") {
+      const userId: string | undefined = data?.metadata?.userId;
+      const productId: string | undefined = data?.product_id;
+      const tier = productId ? planTierForProductId(productId) : null;
+
+      if (userId && dodoSubscriptionId && tier) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            planTier: tier,
+            planStatus: "ACTIVE",
+            dodoSubscriptionId,
+            planPeriodStart: data?.previous_billing_date ? new Date(data.previous_billing_date) : new Date(),
+            planPeriodEnd: data?.next_billing_date ? new Date(data.next_billing_date) : null,
+            ...(dodoCustomerId ? { dodoCustomerId } : {}),
+          },
+        });
+      } else {
+        console.error("subscription.active/renewed missing userId/subscription_id/known product_id", {
+          userId,
+          dodoSubscriptionId,
+          productId,
+        });
+      }
+    } else if (type === "subscription.on_hold" && dodoSubscriptionId) {
+      await prisma.user.updateMany({
+        where: { dodoSubscriptionId },
+        data: { planStatus: "ON_HOLD" },
+      });
+    } else if (type === "subscription.failed" && dodoSubscriptionId) {
+      // Terminal per Dodo's docs -- the subscription cannot be reactivated,
+      // the customer has to start a new one. Only matters here if a plan
+      // had already gone ACTIVE and later failed in a way that surfaces as
+      // "failed" rather than "on_hold"; a no-op if this fires for an
+      // attempt that never made it to ACTIVE.
+      await prisma.user.updateMany({
+        where: { dodoSubscriptionId },
+        data: { planStatus: "FAILED" },
+      });
+    }
+
+    return c.json({ received: true });
+  }
+
+  const purchaseId: string | undefined = payload?.data?.metadata?.purchaseId ?? payload?.metadata?.purchaseId;
 
   if (!purchaseId || !type) {
     return c.json({ received: true });

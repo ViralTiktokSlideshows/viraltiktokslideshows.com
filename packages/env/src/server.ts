@@ -33,6 +33,16 @@ export const env = createEnv({
     DODO_PAYMENTS_ENVIRONMENT: z.enum(["test_mode", "live_mode"]).default("test_mode"),
     DODO_UNLOCK_PRODUCT_ID: z.string().min(1),
 
+    // Dodo subscription products for the three plan tiers advertised on the
+    // landing page's Pricing section. Optional (unlike DODO_UNLOCK_PRODUCT_ID
+    // above) since these get created in the Dodo dashboard after the app is
+    // already deployed and running on the $2 unlock alone -- POST
+    // /api/billing/subscribe returns a clear 501 for any tier whose product
+    // id isn't set yet, rather than the whole server failing to boot.
+    DODO_CREATOR_PRODUCT_ID: z.string().min(1).optional(),
+    DODO_PRO_PRODUCT_ID: z.string().min(1).optional(),
+    DODO_AGENCY_PRODUCT_ID: z.string().min(1).optional(),
+
     // OpenRouter (slide text via google/gemini-3.5-flash) — see
     // apps/server/src/lib/openrouter.ts.
     OPENROUTER_API_KEY: z.string().min(1),
