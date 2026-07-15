@@ -53,4 +53,17 @@ RUN corepack enable && corepack prepare pnpm@11.4.0 --activate
 # reinstalled here.
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/pnpm-workspace.yaml ./
-COPY --from=builder /app
+COPY --from=builder /app/.npmrc ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/apps/web ./apps/web
+COPY --from=builder /app/packages ./packages
+
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV HOSTNAME=0.0.0.0
+
+WORKDIR /app/apps/web
+
+EXPOSE 3001
+
+CMD ["pnpm", "start"]

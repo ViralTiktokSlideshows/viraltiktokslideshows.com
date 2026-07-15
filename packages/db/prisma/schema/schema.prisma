@@ -106,4 +106,38 @@ enum SlideFormat {
 // PAID by the /api/webhooks/dodo handler once Dodo confirms the payment.
 // `idea`/`formats`/`vibes`/`slides` are a snapshot of the mock-generated
 // slideshow at checkout time — there's no separate Slideshow table yet since
-// generation is still the dummy /api/generat
+// generation is still the dummy /api/generate endpoint, not persisted.
+model Purchase {
+  id             String         @id @default(cuid())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idea           String
+  formats        Json
+  vibes          Json
+  slides         Json
+  amount         Int            @default(200)
+  currency       String         @default("USD")
+  status         PurchaseStatus @default(PENDING)
+  dodoCheckoutId String?
+  dodoPaymentId  String?
+  // Snapshot of the user's Settings > Generation defaults format at the
+  // moment this was generated (nullable — rows created before this field
+  // existed have none). Shown as a tag on /dashboard/saved.
+  format         SlideFormat?
+  // Starred on /dashboard/saved via PATCH /api/purchases/:id. Independent
+  // of status — someone can save a PENDING or even FAILED attempt's idea
+  // to retry later, not just PAID ones.
+  saved          Boolean        @default(false)
+  // Client-generated per-attempt key (see apps/web/src/lib/checkout-client.ts).
+  // Lets /api/checkout/create be called more than once for the same unlock
+  // attempt (double-click, retry, resumed after magic-link sign-in) without
+  // creating a second PENDING purchase — repeat calls with the same key
+  // return the cached checkoutUrl below instead of hitting Dodo again.
+  idempotencyKey String?        @unique
+  checkoutUrl    String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([dodoCheckoutId])
+  @@map("purchase")
+}

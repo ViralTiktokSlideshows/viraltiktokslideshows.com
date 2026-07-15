@@ -54,4 +54,15 @@ export default async function SignUpPage({
 
       <p className="mt-6 text-xs text-muted-foreground">
         By continuing you agree to our{" "}
-        <Link href="/terms" classN
+        <Link href="/terms" className="text-riot hover:underline">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="text-riot hover:underline">
+          Privacy policy
+        </Link>
+        .
+      </p>
+    </AuthSplitShell>
+  );
+}

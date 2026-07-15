@@ -77,4 +77,12 @@ export default function TermsPage() {
         {SECTIONS.map((section) => (
           <section key={section.title}>
             <h2 className="font-display text-lg font-bold text-foreground">{section.title}</h2>
-            <p className="mt-2 whitespace-pre-li
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
+              {section.body}
+            </p>
+          </section>
+        ))}
+      </div>
+    </main>
+  );
+}
