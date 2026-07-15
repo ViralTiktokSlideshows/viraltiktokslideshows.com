@@ -2,6 +2,8 @@
 
 import { env } from "@viraltiktokslideshows/env/web";
 
+import type { PlanTier, PlanUsage } from "./auth-client";
+
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 
 export type SlideFormat = "STORYTIME" | "LISTICLE" | "HOT_TAKE";
@@ -18,6 +20,7 @@ export type UserSettings = {
   // nothing to show them, so the Settings page disables "Manage billing"
   // until this flips true.
   hasBillingHistory: boolean;
+  plan: PlanUsage | null;
 };
 
 async function apiFetch(path: string, init?: RequestInit) {
@@ -71,6 +74,24 @@ export async function openBillingPortal(): Promise<void> {
   const data = await res.json();
   if (typeof data?.url === "string") {
     window.location.href = data.url;
+  }
+}
+
+// Starts a subscription checkout for one of the three plan tiers and
+// redirects straight to Dodo's hosted checkout -- same shape as
+// openBillingPortal above, nothing to render on our side while it resolves.
+export async function subscribeToPlan(tier: PlanTier): Promise<void> {
+  const res = await apiFetch("/api/billing/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ tier }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data?.error ?? "Could not start checkout.");
+  }
+  const data = await res.json();
+  if (typeof data?.checkoutUrl === "string") {
+    window.location.href = data.checkoutUrl;
   }
 }
 
