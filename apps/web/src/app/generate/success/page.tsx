@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, Clock, Copy, Download, Loader2, Plus, Share, XCircle } from "lucide-react";
+import { Check, Clock, Copy, Download, LayoutGrid, Loader2, Plus, Share, XCircle } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
@@ -55,6 +55,7 @@ function buildCaption(idea: string, hook: string) {
 }
 
 function SuccessContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const purchaseId = searchParams.get("purchase");
   const [status, setStatus] = useState<Status>("checking");
@@ -140,6 +141,10 @@ function SuccessContent() {
       try {
         await downloadPurchaseZip(purchaseId);
         setDownloadState("idle");
+        // They've seen the slideshow and downloaded it -- there's nothing
+        // else to do on this page, so send them on to their dashboard
+        // rather than leaving them stranded on a "done" screen.
+        router.push("/dashboard");
       } catch (error) {
         console.error(error);
         setDownloadState("error");
@@ -253,15 +258,29 @@ function SuccessContent() {
                   <Clock className="size-3.5 text-spark" />
                   Evenings (7–9pm) tend to post best
                 </div>
-                <Button
-                  variant="outline"
-                  className="gap-1.5"
-                  nativeButton={false}
-                  render={<Link href="/generate" />}
-                >
-                  <Plus className="size-4" data-icon="inline-start" />
-                  Generate another
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="gap-1.5"
+                    nativeButton={false}
+                    render={<Link href="/generate" />}
+                  >
+                    <Plus className="size-4" data-icon="inline-start" />
+                    Generate another
+                  </Button>
+                  {/* For anyone who saw the slideshow and decided not to
+                      download it right now -- same destination handleDownload
+                      lands on, just without waiting on a file to save first. */}
+                  <Button
+                    variant="ghost"
+                    className="gap-1.5"
+                    nativeButton={false}
+                    render={<Link href="/dashboard" />}
+                  >
+                    <LayoutGrid className="size-4" data-icon="inline-start" />
+                    Go to dashboard
+                  </Button>
+                </div>
               </div>
             </div>
           </div>

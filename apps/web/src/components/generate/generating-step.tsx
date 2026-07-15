@@ -20,10 +20,20 @@ const TIPS = [
 
 export function GeneratingStep({
   idea,
+  formats = [],
+  vibes = [],
   onComplete,
   onError,
 }: {
   idea: string;
+  // Optional -- the regular generate flow has no format/vibe picker (a
+  // signed-in user's Settings > Generation defaults is applied invisibly
+  // server-side instead, see /api/generate), but onboarding's two
+  // personalization steps collect these explicitly and thread them through
+  // here so they land on the Purchase snapshot the same way they always
+  // could, per the `formats`/`vibes` fields already on GeneratedSlideshow.
+  formats?: string[];
+  vibes?: string[];
   onComplete: (data: GeneratedSlideshow) => void;
   onError: () => void;
 }) {
@@ -59,7 +69,7 @@ export function GeneratingStep({
     const request = fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea, formats: [], vibes: [], turnstileToken }),
+      body: JSON.stringify({ idea, formats, vibes, turnstileToken }),
     }).then((res) => {
       if (!res.ok) throw new Error("Generate request failed");
       return res.json() as Promise<GeneratedSlideshow>;
