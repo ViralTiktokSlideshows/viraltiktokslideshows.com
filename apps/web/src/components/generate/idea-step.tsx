@@ -4,6 +4,7 @@ import { ArrowUp } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
+import { Textarea } from "@viraltiktokslideshows/ui/components/textarea";
 
 import { SlideDeck } from "@/components/landing/slide-deck";
 import { useMonthlyUsage } from "@/lib/purchases-client";
@@ -22,6 +23,16 @@ export function IdeaStep({
     event?.preventDefault();
     if (!idea.trim()) return;
     onSubmit(idea.trim());
+  }
+
+  // Enter submits, Shift+Enter inserts a newline — a textarea doesn't
+  // submit its form on Enter by default the way a single-line input did,
+  // so this keeps the "Press Enter to generate" caption below true.
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleSubmit();
+    }
   }
 
   return (
@@ -44,22 +55,25 @@ export function IdeaStep({
           Type an idea. Get a viral slideshow.
         </h2>
 
+        {/* Same textarea + wrapper as the homepage hero — one input, styled
+            identically, wherever someone types their idea. */}
         <form onSubmit={handleSubmit} className="mt-8 w-full max-w-xl">
-          <div className="flex items-center gap-2 rounded-2xl border border-border bg-card p-2 pl-4 shadow-sm">
-            <input
+          <div className="relative rounded-2xl border border-border bg-card p-2 shadow-sm">
+            <Textarea
               value={idea}
               onChange={(event) => setIdea(event.target.value)}
-              placeholder="why most people fail at saving money"
+              onKeyDown={handleKeyDown}
+              placeholder='What&apos;s your slideshow about? e.g. "why most people fail at saving money"'
               // biome-ignore lint/a11y/noAutofocus: this is the sole purpose of the page
               autoFocus
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none sm:text-base"
+              className="min-h-[84px] resize-none border-0 bg-transparent p-3 pr-14 text-sm shadow-none focus-visible:ring-0 sm:text-base"
             />
             <Button
               type="submit"
               size="icon"
-              className="rounded-2xl"
               disabled={!idea.trim()}
-              aria-label="Generate"
+              className="absolute right-4 bottom-4"
+              aria-label="Generate slideshow"
             >
               <ArrowUp className="size-4" />
             </Button>

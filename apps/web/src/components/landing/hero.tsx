@@ -16,11 +16,21 @@ export function Hero() {
   const router = useRouter();
   const [idea, setIdea] = useState("");
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function handleSubmit(event?: React.FormEvent) {
+    event?.preventDefault();
     const trimmed = idea.trim();
     if (!trimmed) return;
     router.push(`/generate?idea=${encodeURIComponent(trimmed)}` as Route);
+  }
+
+  // Enter submits, Shift+Enter inserts a newline — matches idea-step.tsx's
+  // textarea on /generate so the two "type your idea" inputs behave
+  // identically, not just look identical.
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      handleSubmit();
+    }
   }
 
   return (
@@ -59,6 +69,7 @@ export function Hero() {
               <Textarea
                 value={idea}
                 onChange={(event) => setIdea(event.target.value)}
+                onKeyDown={handleKeyDown}
                 placeholder='What&apos;s your slideshow about? e.g. "why most people fail at saving money"'
                 className="min-h-[84px] resize-none border-0 bg-transparent p-3 pr-14 text-sm shadow-none focus-visible:ring-0 sm:text-base"
               />
