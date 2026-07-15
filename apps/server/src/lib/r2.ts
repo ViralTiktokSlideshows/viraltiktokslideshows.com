@@ -20,19 +20,42 @@ const r2 = new S3Client({
   },
 });
 
+// Neither the source-image fetch nor the R2 upload had a timeout -- unlike
+// every other external call in this app (ideogram.ts's own 45s, openrouter.ts's
+// own timeout). A slow/hanging Ideogram image URL or a stuck R2 request
+// left generateSlideImages's Promise.allSettled waiting forever on that one
+// slide, which blocks the *entire* batch (allSettled only resolves once
+// every promise has), which blocks fillRemainingSlideImages, which blocks
+// POST /api/checkout/create -- with no error, just an unlock button that
+// spins indefinitely. Same 30s budget for both steps here.
+const REQUEST_TIMEOUT_MS = 30_000;
+
 export async function uploadToR2(
   bytes: Uint8Array,
   key: string,
   contentType: string,
 ): Promise<string> {
-  await r2.send(
-    new PutObjectCommand({
-      Bucket: env.R2_BUCKET_NAME,
-      Key: key,
-      Body: bytes,
-      ContentType: contentType,
-    }),
-  );
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    await r2.send(
+      new PutObjectCommand({
+        Bucket: env.R2_BUCKET_NAME,
+        Key: key,
+        Body: bytes,
+        ContentType: contentType,
+      }),
+      { abortSignal: controller.signal },
+    );
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`R2 upload timed out after ${REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   return `${env.R2_PUBLIC_URL}/${key}`;
 }
@@ -41,7 +64,21 @@ export async function uploadToR2(
 // it to R2, returning the permanent R2 URL. Used right after Ideogram
 // generates an image, so the ephemeral link is never the one we persist.
 export async function persistImageToR2(sourceUrl: string, key: string): Promise<string> {
-  const res = await fetch(sourceUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(sourceUrl, { signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(`Timed out fetching source image for R2 upload after ${REQUEST_TIMEOUT_MS}ms`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+
   if (!res.ok) {
     throw new Error(`Failed to fetch source image for R2 upload (${res.status})`);
   }

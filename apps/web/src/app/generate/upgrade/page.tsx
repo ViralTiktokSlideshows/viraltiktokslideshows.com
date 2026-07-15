@@ -3,7 +3,7 @@
 import { Loader2, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
@@ -18,7 +18,12 @@ import { subscribeToPlan } from "@/lib/settings-client";
 // auto-resumes the same checkout the moment it re-mounts signed in. Mirrors
 // the pattern reveal-step.tsx uses for the $2 unlock, just without needing
 // to stash any slideshow data — there's nothing to remember but the tier.
-export default function UpgradePage() {
+//
+// useSearchParams() requires a Suspense boundary during static generation
+// (Next.js build error otherwise, see generate/checkout/page.tsx for the
+// same pattern) -- UpgradeContent holds all the actual logic/markup,
+// UpgradePage below just wraps it.
+function UpgradeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isPending } = useSession();
@@ -122,5 +127,13 @@ export default function UpgradePage() {
         </p>
       </div>
     </GenerateShell>
+  );
+}
+
+export default function UpgradePage() {
+  return (
+    <Suspense fallback={null}>
+      <UpgradeContent />
+    </Suspense>
   );
 }
