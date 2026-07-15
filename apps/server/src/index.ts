@@ -615,8 +615,10 @@ app.get("/api/purchases/:id/download", async (c) => {
 
   // "uint8array" (not "nodebuffer") — Hono's c.body() wants a plain
   // Uint8Array<ArrayBuffer>, and Node's Buffer type doesn't structurally
-  // match that under strict TS lib typings.
-  const zipBuffer = await zip.generateAsync({ type: "uint8array" });
+  // match that under strict TS lib typings. Uint8Array.from(...) forces a
+  // freshly-allocated, non-shared ArrayBuffer backing so it satisfies that
+  // generic even though JSZip's own return type is Uint8Array<ArrayBufferLike>.
+  const zipBuffer = Uint8Array.from(await zip.generateAsync({ type: "uint8array" }));
 
   return c.body(zipBuffer, 200, {
     "Content-Type": "application/zip",
