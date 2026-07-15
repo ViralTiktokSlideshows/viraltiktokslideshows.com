@@ -7,18 +7,34 @@ import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { BrandMark } from "@/components/brand-mark";
 import { Reveal } from "@/components/reveal";
 
+// Every link below points at a real destination — no "#" placeholders.
+// Affiliates was dropped entirely rather than stubbed since there's no
+// affiliate program to point it at.
 const FOOTER_COLUMNS = [
   {
     title: "Product",
-    links: ["Generate", "Pricing", "Formats & vibes", "FAQ"],
+    links: [
+      { label: "Generate", href: "/generate" },
+      { label: "Pricing", href: "/#pricing" },
+      { label: "Formats & vibes", href: "/generate" },
+      { label: "FAQ", href: "/#faq" },
+    ],
   },
   {
     title: "Resources",
-    links: ["How it works", "The viral playbook", "Blog", "Support"],
+    links: [
+      { label: "How it works", href: "/#how-it-works" },
+      { label: "The viral playbook", href: "/#playbook" },
+      { label: "Blog", href: "/blog" },
+      { label: "Support", href: "/contact" },
+    ],
   },
   {
     title: "Company",
-    links: ["About", "Contact", "Affiliates"],
+    links: [
+      { label: "About", href: "/about" },
+      { label: "Contact", href: "/contact" },
+    ],
   },
 ] as const;
 
@@ -85,13 +101,13 @@ export function FinalCta() {
                 <h4 className="text-sm font-semibold text-foreground">{column.title}</h4>
                 <ul className="mt-3 flex flex-col gap-2.5">
                   {column.links.map((link) => (
-                    <li key={link}>
-                      <a
-                        href="#"
+                    <li key={link.label}>
+                      <Link
+                        href={link.href}
                         className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                       >
-                        {link}
-                      </a>
+                        {link.label}
+                      </Link>
                     </li>
                   ))}
                 </ul>
