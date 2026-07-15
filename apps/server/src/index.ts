@@ -12,6 +12,7 @@ import {
   createBillingPortalSession,
   createPlanCheckoutSession,
   createUnlockCheckoutSession,
+  dodo,
 } from "./lib/dodo";
 import { fillRemainingSlideImages, generateSlideshow } from "./lib/generate-slideshow";
 import {
@@ -645,7 +646,7 @@ app.get("/api/checkout/status", async (c) => {
     return c.json({ error: "Missing purchase id" }, 400);
   }
 
-  const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+  let purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) {
     return c.json({ error: "Purchase not found" }, 404);
   }
@@ -659,6 +660,48 @@ app.get("/api/checkout/status", async (c) => {
   const user = c.get("user");
   if (user && purchase.userId !== user.id) {
     return c.json({ error: "Purchase not found" }, 404);
+  }
+
+  // Fallback for when the webhook hasn't (or can't) land: Dodo's webhook
+  // servers can't reach a local http://localhost:3000 during dev, so a
+  // PENDING row here can sit forever with no error -- and even in prod the
+  // webhook can lag behind the customer's redirect back to us. Dodo's own
+  // return_url already carries a payment_id, so if the client passes it and
+  // we're still PENDING, look the payment up directly instead of waiting on
+  // a webhook that may never arrive. metadata.purchaseId is checked against
+  // *this* purchase (not just trusted from the query string) so a guessed
+  // or spoofed payment_id can't be used to mark someone else's purchase paid.
+  const paymentId = c.req.query("payment_id");
+  if (purchase.status === "PENDING" && paymentId) {
+    try {
+      const payment = await dodo.payments.retrieve(paymentId);
+      const metaPurchaseId = (payment.metadata as Record<string, string> | undefined)?.purchaseId;
+
+      if (metaPurchaseId === purchase.id) {
+        if (payment.status === "succeeded") {
+          purchase = await prisma.purchase.update({
+            where: { id: purchase.id },
+            data: { status: "PAID", dodoPaymentId: payment.payment_id },
+          });
+        } else if (payment.status === "failed") {
+          purchase = await prisma.purchase.update({
+            where: { id: purchase.id },
+            data: { status: "FAILED" },
+          });
+        } else if (payment.status === "cancelled") {
+          purchase = await prisma.purchase.update({
+            where: { id: purchase.id },
+            data: { status: "CANCELED" },
+          });
+        }
+        // Any other status (processing, requires_*) -- leave PENDING as-is,
+        // the frontend just keeps polling.
+      }
+    } catch (error) {
+      // Lookup failing (bad id, transient Dodo error, etc.) isn't fatal --
+      // fall through and return whatever status the DB already had.
+      console.error("Dodo payment status fallback lookup failed", error);
+    }
   }
 
   return c.json({

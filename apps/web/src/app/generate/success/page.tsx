@@ -58,6 +58,12 @@ function SuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const purchaseId = searchParams.get("purchase");
+  // Dodo's return_url can carry this back too (see the stuck-on-localhost
+  // case: Dodo's webhook servers can't reach http://localhost:3000, so the
+  // usual PENDING -> PAID flip never lands). Passed straight through to
+  // /api/checkout/status so it can look the payment up directly instead of
+  // waiting on a webhook that may never arrive in dev.
+  const paymentId = searchParams.get("payment_id");
   const [status, setStatus] = useState<Status>("checking");
   const [idea, setIdea] = useState("");
   const [slides, setSlides] = useState<Slide[]>([]);
@@ -85,10 +91,11 @@ function SuccessContent() {
     async function poll() {
       attempts += 1;
       try {
-        const res = await fetch(
-          `${env.NEXT_PUBLIC_SERVER_URL}/api/checkout/status?purchase=${purchaseId}`,
-          { credentials: "include" },
-        );
+        const statusUrl = new URL(`${env.NEXT_PUBLIC_SERVER_URL}/api/checkout/status`);
+        statusUrl.searchParams.set("purchase", purchaseId);
+        if (paymentId) statusUrl.searchParams.set("payment_id", paymentId);
+
+        const res = await fetch(statusUrl.toString(), { credentials: "include" });
         if (!res.ok) {
           if (!cancelled) setStatus("not_found");
           return;
@@ -117,7 +124,7 @@ function SuccessContent() {
     return () => {
       cancelled = true;
     };
-  }, [purchaseId]);
+  }, [purchaseId, paymentId]);
 
   if (status === "paid" && slides.length > 0) {
     const { caption, hashtags } = buildCaption(idea, slides[0]?.text ?? "");
