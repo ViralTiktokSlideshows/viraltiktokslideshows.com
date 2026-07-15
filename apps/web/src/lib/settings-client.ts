@@ -13,6 +13,11 @@ export type UserSettings = {
   hasGoogle: boolean;
   defaultFormat: SlideFormat;
   autoAppendHashtags: boolean;
+  // True once the user has ever completed a Dodo payment (i.e. has a
+  // dodoCustomerId). Before that, Dodo's hosted Customer Portal has
+  // nothing to show them, so the Settings page disables "Manage billing"
+  // until this flips true.
+  hasBillingHistory: boolean;
 };
 
 async function apiFetch(path: string, init?: RequestInit) {
