@@ -49,4 +49,26 @@ export default async function SignUpPage({
       <p className="mt-2 text-sm text-muted-foreground">Free to start — no card required.</p>
 
       <div className="mt-8 flex flex-col gap-4">
-        <GoogleAuthButton label="Continue wi
+        <GoogleAuthButton label="Continue with Google" callbackURL={callbackURL} />
+        <OrDivider />
+        <MagicLinkForm
+          buttonLabel="Send magic link"
+          helperText="We'll email you a secure sign-in link — no password to remember."
+          callbackURL={callbackURL}
+        />
+      </div>
+
+      <p className="mt-6 text-xs text-muted-foreground">
+        By continuing you agree to our{" "}
+        <Link href="/terms" className="text-riot hover:underline">
+          Terms
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="text-riot hover:underline">
+          Privacy policy
+        </Link>
+        .
+      </p>
+    </AuthSplitShell>
+  );
+}
