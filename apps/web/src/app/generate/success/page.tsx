@@ -11,6 +11,7 @@ import { env } from "@viraltiktokslideshows/env/web";
 import { GenerateShell } from "@/components/dashboard/generate-shell";
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
 import { downloadPurchaseZip } from "@/lib/purchases-client";
+import { fetchSettings } from "@/lib/settings-client";
 
 // Dodo Payments return_url destination (see apps/server/src/index.ts's
 // /api/checkout/create, which sets return_url to
@@ -61,6 +62,15 @@ function SuccessContent() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [copied, setCopied] = useState(false);
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
+  // Defaults to true (matches the User model's default) so hashtags don't
+  // flash in and then disappear once the real preference loads.
+  const [autoAppendHashtags, setAutoAppendHashtags] = useState(true);
+
+  useEffect(() => {
+    fetchSettings().then((settings) => {
+      if (settings) setAutoAppendHashtags(settings.autoAppendHashtags);
+    });
+  }, []);
 
   useEffect(() => {
     if (!purchaseId) {
@@ -114,7 +124,8 @@ function SuccessContent() {
 
     async function handleCopyAll() {
       try {
-        await navigator.clipboard.writeText(`${caption}\n\n${hashtags.join(" ")}`);
+        const text = autoAppendHashtags ? `${caption}\n\n${hashtags.join(" ")}` : caption;
+        await navigator.clipboard.writeText(text);
         setCopied(true);
         setTimeout(() => setCopied(false), 1800);
       } catch {
@@ -215,16 +226,26 @@ function SuccessContent() {
                   </button>
                 </div>
                 <p className="mt-2 text-sm text-foreground">{caption}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {hashtags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="rounded-2xl bg-accent/10 px-2 py-0.5 text-xs text-accent"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
+                {autoAppendHashtags ? (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {hashtags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="rounded-2xl bg-accent/10 px-2 py-0.5 text-xs text-accent"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Hashtags are off —{" "}
+                    <Link href="/dashboard/settings" className="text-riot hover:underline">
+                      turn them back on in Settings
+                    </Link>
+                    .
+                  </p>
+                )}
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
