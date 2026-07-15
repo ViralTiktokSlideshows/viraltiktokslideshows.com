@@ -1,19 +1,55 @@
 "use client";
 
+import { ArrowRight, Loader2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
 import { Button } from "@viraltiktokslideshows/ui/components/button";
+
+import { useSession } from "@/lib/auth-client";
+import { createCheckoutSession, savePendingSlideshow } from "@/lib/checkout-client";
 
 import { StepShell } from "./step-shell";
 import type { GeneratedSlideshow } from "./types";
 
-export function RevealStep({
-  data,
-  onNext,
-}: {
-  data: GeneratedSlideshow;
-  onNext: () => void;
-}) {
+// Reveal + unlock collapsed into a single step: the hook slide, straight
+// into "Try for $2" with the same auth-conscious checkout logic that used
+// to live on a separate UnlockStep screen — signed-in users go straight to
+// a Dodo checkout session, signed-out users are handed off to
+// /generate/checkout (the "sign in and pay" screen) with this slideshow
+// stashed for pickup once they've signed in — see
+// apps/web/src/lib/checkout-client.ts.
+export function RevealStep({ data }: { data: GeneratedSlideshow }) {
+  const router = useRouter();
+  const { user, isPending } = useSession();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [error, setError] = useState("");
+  // Stable for the lifetime of this mounted step — repeat clicks (double
+  // click, retry after an error) reuse the same key so the server dedupes
+  // them into a single Purchase instead of creating duplicates.
+  const [idempotencyKey] = useState(() => crypto.randomUUID());
+
   const remaining = Math.max(data.slideCount - 1, 0);
   const hookImageUrl = data.slides[0]?.imageUrl;
+
+  async function handleUnlock() {
+    setError("");
+
+    if (!user) {
+      savePendingSlideshow(data);
+      router.push("/generate/checkout");
+      return;
+    }
+
+    setIsRedirecting(true);
+    try {
+      const { checkoutUrl } = await createCheckoutSession({ ...data, idempotencyKey });
+      window.location.href = checkoutUrl;
+    } catch (err) {
+      setIsRedirecting(false);
+      setError(err instanceof Error ? err.message : "Could not start checkout. Try again.");
+    }
+  }
 
   return (
     <StepShell>
@@ -68,9 +104,33 @@ export function RevealStep({
           {remaining} more slide{remaining === 1 ? "" : "s"} ready behind it
         </p>
 
-        <Button type="button" size="lg" className="mt-8" onClick={onNext}>
-          See what it takes to unlock
+        <Button
+          type="button"
+          size="lg"
+          className="mt-8"
+          disabled={isPending || isRedirecting}
+          onClick={handleUnlock}
+        >
+          {isRedirecting ? (
+            <>
+              <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+              Redirecting to checkout
+            </>
+          ) : (
+            <>
+              Try for $2
+              <ArrowRight className="size-4" data-icon="inline-end" />
+            </>
+          )}
         </Button>
+
+        {error ? <p className="mt-3 text-xs text-destructive">{error}</p> : null}
+
+        <p className="mt-4 text-xs text-muted-foreground">
+          {user
+            ? "You'll be redirected to a secure DodoPayments checkout."
+            : "Sign in on the next screen to unlock — it only takes a few seconds."}
+        </p>
       </div>
     </StepShell>
   );
