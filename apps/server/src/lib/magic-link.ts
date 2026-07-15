@@ -5,12 +5,12 @@ import { env } from "@viraltiktokslideshows/env/server";
 
 import { sendMail } from "./mailer";
 
-// 100% custom — no magic-link plugin from any auth library. Same
+// 100% custom -- no magic-link plugin from any auth library. Same
 // hash-before-storing pattern as session.ts: the raw token only ever exists
 // in the email and, briefly, in the verification URL the user clicks.
 const TOKEN_TTL_MS = 1000 * 60 * 15; // 15 minutes
 
-// DB-backed per-email throttle — persists across restarts/instances (unlike
+// DB-backed per-email throttle -- persists across restarts/instances (unlike
 // an in-memory counter) since it just counts rows already being written to
 // Postgres for every send. Caps how many links one inbox can be sent inside
 // a rolling window, independent of who's asking for them.
@@ -33,26 +33,50 @@ function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
+// Brand tokens, matching packages/ui/src/styles/globals.css (--void, --bone)
+// and the accent used on primary buttons across the app. Email clients
+// strip external stylesheets and custom @font-face is unreliable, so these
+// are inlined and the font stack falls back to system UI fonts rather than
+// Clash Display.
+const VOID = "#110f0d";
+const BONE = "#f5efe4";
+const MUTED = "#948c7e";
+const ACCENT = "#ffb020";
+const LOGO_URL = `${env.CORS_ORIGIN}/logo-mark.png`;
+
 function renderMagicLinkEmail(url: string) {
   const text = `Sign in to Viral TikTok Slideshows\n\n${url}\n\nThis link expires in 15 minutes and can only be used once. If you didn't request it, you can ignore this email.`;
   const html = `
-    <div style="background:#f5efe4;padding:32px 16px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;">
+    <div style="background:${BONE};padding:32px 16px;font-family:system-ui,-apple-system,Segoe UI,sans-serif;">
       <table role="presentation" width="100%" style="max-width:420px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;">
         <tr>
           <td style="padding:32px 28px 24px;">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;">
-              <span style="display:inline-block;width:22px;height:22px;background:#110f0d;border-radius:8px;vertical-align:middle;"></span>
-              <span style="font-weight:700;font-size:15px;color:#110f0d;vertical-align:middle;">Viral Tiktok Slideshows</span>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:28px;">
+              <img
+                src="${LOGO_URL}"
+                width="28"
+                height="28"
+                alt="Viral TikTok Slideshows"
+                style="display:block;width:28px;height:28px;border-radius:8px;"
+              />
+              <span style="font-weight:700;font-size:15px;color:${VOID};vertical-align:middle;">Viral Tiktok Slideshows</span>
             </div>
-            <h1 style="font-size:20px;font-weight:700;color:#110f0d;margin:0 0 12px;">Sign in to your account</h1>
-            <p style="font-size:14px;line-height:1.6;color:#948c7e;margin:0 0 24px;">
+            <h1 style="font-size:20px;font-weight:700;color:${VOID};margin:0 0 12px;">Sign in to your account</h1>
+            <p style="font-size:14px;line-height:1.6;color:${MUTED};margin:0 0 24px;">
               Click the button below to sign in. This link expires in 15 minutes and can only be used once.
             </p>
-            <a href="${url}" style="display:inline-block;background:#ffb020;color:#110f0d;font-weight:600;font-size:14px;text-decoration:none;padding:12px 24px;border-radius:16px;">
+            <a href="${url}" style="display:inline-block;background:${ACCENT};color:${VOID};font-weight:600;font-size:14px;text-decoration:none;padding:12px 24px;border-radius:16px;">
               Sign in
             </a>
-            <p style="font-size:12px;line-height:1.6;color:#948c7e;margin:24px 0 0;">
+            <p style="font-size:12px;line-height:1.6;color:${MUTED};margin:24px 0 0;">
               Didn't request this? You can safely ignore this email.
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 28px;border-top:1px solid #f0ebe0;">
+            <p style="font-size:11px;line-height:1.6;color:${MUTED};margin:0;">
+              Viral TikTok Slideshows &middot; viraltiktokslideshows.com
             </p>
           </td>
         </tr>
@@ -64,7 +88,7 @@ function renderMagicLinkEmail(url: string) {
 
 // Creates a MagicLinkToken row and emails the sign-in link. `callbackURL` is
 // the page on the web app the user should land on after a successful
-// verification (e.g. /generate/checkout for the pay-to-unlock flow) — it's
+// verification (e.g. /generate/checkout for the pay-to-unlock flow) -- it's
 // carried through the verification URL as a query param, not stored server
 // side, since it's not sensitive and doesn't need to survive a restart.
 export async function sendMagicLinkEmail(email: string, callbackURL: string) {
