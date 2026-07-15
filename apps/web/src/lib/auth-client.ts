@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { env } from "@viraltiktokslideshows/env/web";
 
-// Thin, hand-written client for the custom auth endpoints on apps/server —
+// Thin, hand-written client for the custom auth endpoints on apps/server --
 // no auth library on this side either. Every call goes to the server with
 // credentials included so the session cookie it sets (see
 // apps/server/src/lib/session.ts) round-trips on every request, even though
@@ -31,10 +31,75 @@ async function apiFetch(path: string, init?: RequestInit) {
   });
 }
 
-// Full-page redirect into the server's OAuth flow — there's no popup/token
+// --- Shared session store ---
+//
+// Every previous version of this hook kept its own local useState, fetched
+// independently on mount, with nothing connecting one instance to another.
+// That meant sign-out (a plain client-side POST, no page reload) updated
+// whichever component called signOut() but left every *other* mounted
+// useSession() consumer -- e.g. the marketing Header, if it happened to
+// stay mounted across the client-side navigation that followed -- holding
+// onto a stale signed-in user forever.
+//
+// This module-level store is the fix: one fetch, one piece of state, every
+// useSession() call site subscribed to the same value via
+// useSyncExternalStore, so sign-out/sign-in/refetch update every consumer
+// in the tree simultaneously with no prop drilling or context provider
+// needed anywhere.
+//
+// Module-level state that's mutated outside React is only safe here
+// because every read/write is guarded to the browser (see the
+// typeof window checks below) -- this module also gets evaluated during
+// SSR for the initial render of any "use client" component that imports
+// it, and a real singleton there would leak one visitor's session into
+// another's server-rendered HTML across requests on the same server
+// process. getServerSnapshot() always returns the same safe, un-signed-in
+// default instead of touching the mutable store.
+type SessionState = { user: SessionUser | null; isPending: boolean };
+
+const SERVER_SNAPSHOT: SessionState = { user: null, isPending: true };
+let sessionState: SessionState = SERVER_SNAPSHOT;
+let initialFetchStarted = false;
+const listeners = new Set<() => void>();
+
+function setSessionState(next: SessionState) {
+  sessionState = next;
+  for (const listener of listeners) listener();
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+function getSnapshot(): SessionState {
+  return sessionState;
+}
+
+function getServerSnapshot(): SessionState {
+  return SERVER_SNAPSHOT;
+}
+
+export async function fetchSession(): Promise<SessionUser | null> {
+  const res = await apiFetch("/api/auth/session");
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.user ?? null;
+}
+
+async function refetchSession() {
+  setSessionState({ user: sessionState.user, isPending: true });
+  const sessionUser = await fetchSession();
+  setSessionState({ user: sessionUser, isPending: false });
+}
+
+// Full-page redirect into the server's OAuth flow -- there's no popup/token
 // exchange happening on this side, Google and the server handle all of
 // that. `callbackURL` is where the server sends the browser back to once a
-// session cookie has been set.
+// session cookie has been set. Because this is a real navigation, the page
+// -- and this module -- reloads fresh on the way back, so the store
+// picking up the new signed-in session on that fresh load is automatic;
+// no explicit refetch call needed here.
 export function signInWithGoogle(callbackURL: string) {
   const url = new URL("/api/auth/google", SERVER_URL);
   url.searchParams.set("callbackURL", callbackURL);
@@ -52,34 +117,34 @@ export async function sendMagicLink(email: string, callbackURL: string, turnstil
   }
 }
 
+// Unlike sign-in, sign-out is a plain client-side action with no page
+// reload -- so it has to update the shared store itself rather than
+// relying on a fresh module load to pick up the change. Every mounted
+// useSession() consumer (Header's avatar menu, the dashboard sidebar,
+// anything else) re-renders as signed-out the moment this resolves.
 export async function signOut() {
   await apiFetch("/api/auth/sign-out", { method: "POST" });
+  setSessionState({ user: null, isPending: false });
 }
 
-export async function fetchSession(): Promise<SessionUser | null> {
-  const res = await apiFetch("/api/auth/session");
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data?.user ?? null;
-}
-
-// Reactive session state for client components — mirrors the shape of the
+// Reactive session state for client components -- mirrors the shape of the
 // hook-based session helpers other auth libraries expose (`user`,
-// `isPending`), but backed entirely by our own GET /api/auth/session.
+// `isPending`), but backed entirely by our own GET /api/auth/session and
+// the shared store above instead of per-instance local state.
 export function useSession() {
-  const [user, setUser] = useState<SessionUser | null>(null);
-  const [isPending, setIsPending] = useState(true);
-
-  const refetch = useCallback(async () => {
-    setIsPending(true);
-    const sessionUser = await fetchSession();
-    setUser(sessionUser);
-    setIsPending(false);
-  }, []);
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
-    refetch();
-  }, [refetch]);
+    // Only the first mounted consumer actually kicks off the fetch --
+    // every later mount (or remount, e.g. navigating between pages that
+    // each render their own useSession() caller) just reads whatever the
+    // shared store already has. Guarded to the browser: effects don't run
+    // during SSR anyway, but this also protects against the module being
+    // evaluated more than once in dev/Fast Refresh.
+    if (initialFetchStarted || typeof window === "undefined") return;
+    initialFetchStarted = true;
+    refetchSession();
+  }, []);
 
-  return { user, isPending, refetch };
+  return { user: state.user, isPending: state.isPending, refetch: refetchSession };
 }
