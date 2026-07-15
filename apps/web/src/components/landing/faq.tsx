@@ -7,16 +7,13 @@ import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
 import { Reveal } from "@/components/reveal";
 
-const FAQS: { q: string; a: React.ReactNode }[] = [
+// Plain strings (not JSX) so the same array can drive both the visible
+// accordion and the FAQPage structured data below without the two ever
+// drifting out of sync.
+const FAQS: { q: string; a: string }[] = [
   {
     q: "Do I need to sign up to try it?",
-    a: (
-      <>
-        No. Type an idea, see your hook slide. You only create an account when you{" "}
-        <span className="text-spark">unlock</span> or{" "}
-        <span className="text-riot">subscribe</span>.
-      </>
-    ),
+    a: "No. Type an idea, see your hook slide instantly. You only create an account when you're ready to unlock the full slideshow for $2.",
   },
   {
     q: "What do I actually get?",
@@ -31,20 +28,38 @@ const FAQS: { q: string; a: React.ReactNode }[] = [
     a: "Slides export at 1080×1920, which works well for Reels and Stories. We're not optimizing for the square 1:1 format Instagram carousels traditionally use.",
   },
   {
-    q: "What happens to unused slideshows?",
-    a: "Everything you've generated stays in your dashboard to redownload anytime. Subscription generations don't roll over month to month.",
+    q: "Do my slideshows expire?",
+    a: "No — everything you generate stays in your dashboard so you can redownload it anytime. Free previews you didn't unlock can be regenerated for a fresh take whenever you want.",
   },
   {
-    q: "Can I cancel anytime?",
-    a: "Yes — cancel anytime from your dashboard. No lock-in, no retention calls.",
+    q: "Is there a subscription?",
+    a: "Not right now — it's pay-per-slideshow: $2 to unlock, no recurring charge, nothing to cancel. If you need volume regularly, email us.",
   },
 ];
+
+const FAQ_STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: FAQS.map((item) => ({
+    "@type": "Question",
+    name: item.q,
+    acceptedAnswer: {
+      "@type": "Answer",
+      text: item.a,
+    },
+  })),
+};
 
 export function Faq() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
 
   return (
     <section id="faq" className="px-4 py-16 sm:px-6 sm:py-20">
+      {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static, hand-authored JSON-LD, no user input */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(FAQ_STRUCTURED_DATA) }}
+      />
       <div className="mx-auto max-w-2xl">
         <Reveal className="flex flex-col items-center text-center">
           <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
