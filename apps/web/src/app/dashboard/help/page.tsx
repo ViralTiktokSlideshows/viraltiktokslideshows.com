@@ -114,7 +114,7 @@ export default function HelpPage() {
 
           <div className="rounded-2xl border border-border bg-card p-5">
             <Link
-              href="/#how-it-works"
+              href="/#playbook"
               className="text-sm font-medium text-foreground hover:underline"
             >
               The viral playbook

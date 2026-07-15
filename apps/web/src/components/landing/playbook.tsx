@@ -16,7 +16,7 @@ const TESTIMONIALS = [
 
 export function Playbook() {
   return (
-    <section className="px-4 py-16 sm:px-6 sm:py-20">
+    <section id="playbook" className="px-4 py-16 sm:px-6 sm:py-20">
       <div className="mx-auto max-w-5xl">
         <Reveal className="flex flex-col items-center text-center">
           <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
