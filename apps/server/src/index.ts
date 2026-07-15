@@ -220,6 +220,7 @@ app.get("/api/settings", async (c) => {
     hasGoogle: Boolean(user.googleId),
     defaultFormat: user.defaultFormat,
     autoAppendHashtags: user.autoAppendHashtags,
+    hasBillingHistory: Boolean(user.dodoCustomerId),
   });
 });
 
@@ -268,6 +269,7 @@ app.patch("/api/settings", async (c) => {
     hasGoogle: Boolean(updated.googleId),
     defaultFormat: updated.defaultFormat,
     autoAppendHashtags: updated.autoAppendHashtags,
+    hasBillingHistory: Boolean(updated.dodoCustomerId),
   });
 });
 
