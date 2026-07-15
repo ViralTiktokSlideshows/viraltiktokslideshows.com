@@ -22,8 +22,8 @@ import {
   type PendingCheckout,
 } from "@/lib/checkout-client";
 
-// Mode 2 of the auth screen: reached from UnlockStep when a signed-out user
-// clicks "Unlock for $2". The slideshow they were about to buy was stashed
+// Mode 2 of the auth screen: reached from RevealStep when a signed-out user
+// clicks "Try for $2". The slideshow they were about to buy was stashed
 // in sessionStorage first (see checkout-client.ts). Google redirects back
 // to this exact page as its callbackURL (same browser, so sessionStorage
 // still has it); the magic-link callbackURL additionally carries the whole
@@ -99,15 +99,36 @@ function GenerateCheckoutContent() {
       leftPanel={
         <div className="mx-auto flex w-full max-w-sm flex-col items-center">
           <div className="w-full overflow-hidden rounded-2xl border border-border bg-card shadow-xl">
-            <div className="flex flex-col gap-1.5 p-5 text-left">
-              <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                Your slideshow
-              </span>
-              <p className="font-display text-lg leading-snug font-bold text-foreground">
-                {slideshow.hook}
-              </p>
-              <p className="text-sm text-muted-foreground">{slideshow.slideCount} slides</p>
-            </div>
+            {slideshow.slides[0]?.imageUrl ? (
+              <div className="relative aspect-3/4 w-full bg-muted">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={slideshow.slides[0].imageUrl}
+                  alt=""
+                  className="absolute inset-0 size-full object-cover"
+                  draggable={false}
+                />
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-void/85 via-void/20 to-transparent p-4 pt-12 text-left">
+                  <span className="text-[11px] font-semibold tracking-widest text-bone/70 uppercase">
+                    Your slideshow
+                  </span>
+                  <p className="mt-1 font-display text-lg leading-snug font-bold text-white">
+                    {slideshow.hook}
+                  </p>
+                  <p className="mt-1 text-xs text-bone/70">{slideshow.slideCount} slides</p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5 p-5 text-left">
+                <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                  Your slideshow
+                </span>
+                <p className="font-display text-lg leading-snug font-bold text-foreground">
+                  {slideshow.hook}
+                </p>
+                <p className="text-sm text-muted-foreground">{slideshow.slideCount} slides</p>
+              </div>
+            )}
             <div className="flex items-center gap-4 border-t border-border bg-muted/40 px-5 py-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="size-3.5 text-spark" />
