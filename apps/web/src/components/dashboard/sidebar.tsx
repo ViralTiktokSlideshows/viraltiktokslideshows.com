@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
@@ -68,13 +68,13 @@ function ProfileMenu({
   email: string;
   image?: string | null;
 }) {
-  const router = useRouter();
   const initial = (name || email || "?").charAt(0).toUpperCase();
 
+  // signOut() itself does the hard redirect to "/" once the session is
+  // cleared -- see apps/web/src/lib/auth-client.ts for why that's a real
+  // page load rather than a client-side router.push from here.
   async function handleSignOut() {
     await signOut();
-    router.push("/");
-    router.refresh();
   }
 
   const avatar = image ? (

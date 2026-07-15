@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
-import { useSession } from "@/lib/auth-client";
+import { getFreshUser, useSession } from "@/lib/auth-client";
 import { createCheckoutSession, savePendingSlideshow } from "@/lib/checkout-client";
 
 import { StepShell } from "./step-shell";
@@ -42,6 +42,22 @@ export function RevealStep({ data }: { data: GeneratedSlideshow }) {
     }
 
     setIsRedirecting(true);
+
+    // The sidebar/header's "signed in" state comes from whatever
+    // useSession() last fetched -- which can be stale by the time someone
+    // actually clicks Unlock (session expired, signed out in another tab,
+    // etc.). Re-checking fresh here means a session that's gone stale gets
+    // caught and sent to sign in cleanly, instead of firing off a checkout
+    // call that 401s and shows a confusing "Not authenticated" error while
+    // the rest of the app still looks signed in.
+    const freshUser = await getFreshUser();
+    if (!freshUser) {
+      setIsRedirecting(false);
+      savePendingSlideshow(data);
+      router.push("/generate/checkout");
+      return;
+    }
+
     try {
       const { checkoutUrl } = await createCheckoutSession({ ...data, idempotencyKey });
       window.location.href = checkoutUrl;

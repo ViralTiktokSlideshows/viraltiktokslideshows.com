@@ -102,10 +102,23 @@ export async function fetchSession(): Promise<SessionUser | null> {
   return data?.user ?? null;
 }
 
-async function refetchSession() {
+// Re-validates the session against the server and updates the shared store
+// -- but, unlike refetchSession below, hands the fresh value straight back
+// to the caller instead of making them wait for a re-render to see it.
+// Needed anywhere a stale cached `user` from useSession() would be
+// dangerous to trust blindly: right before a payment-critical action like
+// starting checkout, the cached value could be minutes old (expired
+// session, signed out in another tab, etc.) even though the sidebar still
+// shows "signed in" from the last successful check.
+export async function getFreshUser(): Promise<SessionUser | null> {
   setSessionState({ user: sessionState.user, isPending: true });
   const sessionUser = await fetchSession();
   setSessionState({ user: sessionUser, isPending: false });
+  return sessionUser;
+}
+
+async function refetchSession() {
+  await getFreshUser();
 }
 
 // Full-page redirect into the server's OAuth flow -- there's no popup/token
@@ -132,14 +145,23 @@ export async function sendMagicLink(email: string, callbackURL: string, turnstil
   }
 }
 
-// Unlike sign-in, sign-out is a plain client-side action with no page
-// reload -- so it has to update the shared store itself rather than
-// relying on a fresh module load to pick up the change. Every mounted
-// useSession() consumer (Header's avatar menu, the dashboard sidebar,
-// anything else) re-renders as signed-out the moment this resolves.
+// Sign-out is a hard navigation back to the landing page, not a soft
+// client-side one -- previously every caller (sidebar's ProfileMenu,
+// Header's desktop + mobile menus) did their own router.push("/") after
+// this resolved, which could land the user back on whatever
+// signed-in-only page they started from (e.g. /dashboard/settings) if
+// that page's own effects re-ran and raced the client-side navigation.
+// window.location.href sidesteps that entirely: it's a real page load,
+// can't be interrupted by component state, and guarantees every other
+// piece of client state (not just the session store) resets too. The
+// store is still cleared first so any component that happens to render
+// again before the navigation completes shows signed-out, not stale data.
 export async function signOut() {
   await apiFetch("/api/auth/sign-out", { method: "POST" });
   setSessionState({ user: null, isPending: false });
+  if (typeof window !== "undefined") {
+    window.location.href = "/";
+  }
 }
 
 // Reactive session state for client components -- mirrors the shape of the

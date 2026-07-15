@@ -3,7 +3,6 @@
 import { LayoutGrid, LogOut, Menu, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
@@ -39,13 +38,12 @@ function ProfileMenu({
   email: string;
   image?: string | null;
 }) {
-  const router = useRouter();
   const initial = (name || email || "?").charAt(0).toUpperCase();
 
+  // signOut() itself does the hard redirect to "/" once the session is
+  // cleared -- see apps/web/src/lib/auth-client.ts.
   async function handleSignOut() {
     await signOut();
-    router.push("/");
-    router.refresh();
   }
 
   const avatar = image ? (
@@ -79,7 +77,6 @@ function ProfileMenu({
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, isPending } = useSession();
-  const router = useRouter();
 
   // Close the mobile menu on route change / escape, and stop background
   // scroll while it's open -- small details, but a menu that traps scroll
@@ -102,8 +99,6 @@ export default function Header() {
   async function handleMobileSignOut() {
     await signOut();
     setMobileOpen(false);
-    router.push("/");
-    router.refresh();
   }
 
   return (
