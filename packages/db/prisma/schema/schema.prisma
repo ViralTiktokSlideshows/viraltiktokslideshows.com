@@ -30,6 +30,20 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Dodo customer id, captured off the first successful payment webhook
+  // (payload.data.customer.customer_id) — see /api/webhooks/dodo. Powers
+  // POST /api/billing/portal (Dodo's hosted Customer Portal). Null until
+  // someone's first purchase actually clears; there's no "manage billing"
+  // to do before that regardless of plan, since Dodo — not us — owns
+  // payment methods and invoice history.
+  dodoCustomerId String?
+
+  // Settings > Generation defaults. Both are real preferences applied
+  // server-side (see /api/generate and generate/success's caption
+  // builder) — not cosmetic toggles.
+  defaultFormat      SlideFormat @default(STORYTIME)
+  autoAppendHashtags Boolean     @default(true)
+
   sessions  Session[]
   purchases Purchase[]
 
@@ -76,35 +90,20 @@ enum PurchaseStatus {
   CANCELED
 }
 
+// The generation "style" — no picker step in the generate flow anymore
+// (see generate-flow.tsx), applied invisibly from the user's
+// Settings > Generation defaults preference instead. Snapshotted onto each
+// Purchase at generation time so /dashboard/saved can show what style a
+// saved idea was written in.
+enum SlideFormat {
+  STORYTIME
+  LISTICLE
+  HOT_TAKE
+}
+
 // A single $2 unlock of one generated slideshow. Created (PENDING) right
 // before we redirect the user to the Dodo Payments checkout, then flipped to
 // PAID by the /api/webhooks/dodo handler once Dodo confirms the payment.
 // `idea`/`formats`/`vibes`/`slides` are a snapshot of the mock-generated
 // slideshow at checkout time — there's no separate Slideshow table yet since
-// generation is still the dummy /api/generate endpoint, not persisted.
-model Purchase {
-  id             String         @id @default(cuid())
-  userId         String
-  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  idea           String
-  formats        Json
-  vibes          Json
-  slides         Json
-  amount         Int            @default(200)
-  currency       String         @default("USD")
-  status         PurchaseStatus @default(PENDING)
-  dodoCheckoutId String?
-  dodoPaymentId  String?
-  // Client-generated per-attempt key (see apps/web/src/lib/checkout-client.ts).
-  // Lets /api/checkout/create be called more than once for the same unlock
-  // attempt (double-click, retry, resumed after magic-link sign-in) without
-  // creating a second PENDING purchase — repeat calls with the same key
-  // return the cached checkoutUrl below instead of hitting Dodo again.
-  idempotencyKey String?        @unique
-  checkoutUrl    String?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  @@unique([dodoCheckoutId])
-  @@map("purchase")
-}
+// generation is still the dummy /api/generat
