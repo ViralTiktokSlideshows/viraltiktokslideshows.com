@@ -13,11 +13,26 @@ import { env } from "@viraltiktokslideshows/env/web";
 
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 
+export type PlanTier = "CREATOR" | "PRO" | "AGENCY";
+
+export type PlanUsage = {
+  tier: PlanTier;
+  label: string;
+  used: number;
+  cap: number;
+  periodEnd: string | null;
+};
+
 export type SessionUser = {
   id: string;
   email: string;
   name: string | null;
   image: string | null;
+  hasCompletedOnboarding: boolean;
+  // Null means no active subscription -- single-unlock ($2/slideshow) is
+  // always available regardless, this is purely about the optional
+  // monthly-quota tier on top of it.
+  plan: PlanUsage | null;
 };
 
 async function apiFetch(path: string, init?: RequestInit) {
