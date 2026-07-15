@@ -105,6 +105,19 @@ export const metadata: Metadata = {
   },
 };
 
+// Site-level Organization schema — kept minimal and only using fields we
+// can back with something real: no sameAs (the social icons in the footer
+// aren't live profile links yet) and no logo (no square logo asset exists
+// yet, just the inline BrandMark SVG). Add both once they're real.
+const ORGANIZATION_STRUCTURED_DATA = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: SITE_NAME,
+  url: "https://viraltiktokslideshows.com",
+  description: SITE_DESCRIPTION,
+  email: "support@viraltiktokslideshows.com",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -115,6 +128,11 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${jetbrainsMono.variable} ${clashDisplay.variable} antialiased`}
       >
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: static, hand-authored JSON-LD, no user input */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_STRUCTURED_DATA) }}
+        />
         <Providers>
           <div className="flex min-h-svh flex-col overflow-x-clip">{children}</div>
         </Providers>
