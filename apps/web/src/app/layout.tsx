@@ -103,6 +103,14 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
+  // RealFaviconGenerator's apple-mobile-web-app-title tag — the rest of its
+  // output (favicon.ico, icon0.svg, icon1.png, apple-icon.png,
+  // manifest.json in app/, web-app-manifest-*.png in public/) is picked up
+  // automatically by Next's file-based metadata icon convention once those
+  // files are dropped in place, no extra config needed here.
+  appleWebApp: {
+    title: SITE_NAME,
+  },
 };
 
 // Site-level Organization schema — kept minimal and only using fields we
