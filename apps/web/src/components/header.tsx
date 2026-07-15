@@ -1,16 +1,25 @@
 "use client";
 
-import { Menu, X } from "lucide-react";
+import { LayoutGrid, LogOut, Menu, X } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@viraltiktokslideshows/ui/components/dropdown-menu";
 
 import { BrandMark } from "@/components/brand-mark";
+import { signOut, useSession } from "@/lib/auth-client";
 
 // Anchors are prefixed with "/" (not bare "#...") since this Header also
 // renders on /terms and /privacy, which don't have these sections on the
-// page — "/#pricing" navigates home and scrolls; a bare "#pricing" on those
+// page -- "/#pricing" navigates home and scrolls; a bare "#pricing" on those
 // pages would just silently do nothing.
 const navLinks = [
   { href: "/#how-it-works", label: "How it works" },
@@ -18,11 +27,62 @@ const navLinks = [
   { href: "/#faq", label: "FAQ" },
 ];
 
+// Avatar + name dropdown for a signed-in visitor -- mirrors the pattern
+// already established in the dashboard sidebar's ProfileMenu, just without
+// the "compact" rail variant this header doesn't need.
+function ProfileMenu({
+  name,
+  email,
+  image,
+}: {
+  name: string;
+  email: string;
+  image?: string | null;
+}) {
+  const router = useRouter();
+  const initial = (name || email || "?").charAt(0).toUpperCase();
+
+  async function handleSignOut() {
+    await signOut();
+    router.push("/");
+    router.refresh();
+  }
+
+  const avatar = image ? (
+    <Image src={image} alt="" width={32} height={32} className="size-8 rounded-2xl object-cover" />
+  ) : (
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-2xl bg-void text-xs font-semibold text-spark">
+      {initial}
+    </span>
+  );
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="flex items-center gap-2 rounded-2xl p-1 pr-2.5 transition-colors hover:bg-muted">
+        {avatar}
+        <span className="max-w-28 truncate text-sm font-medium text-foreground">{name}</span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="bottom" className="w-48 rounded-2xl p-1">
+        <DropdownMenuItem className="cursor-pointer rounded-xl" render={<Link href="/dashboard" />}>
+          <LayoutGrid className="size-4" />
+          Dashboard
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" className="cursor-pointer rounded-xl" onClick={handleSignOut}>
+          <LogOut className="size-4" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { user, isPending } = useSession();
+  const router = useRouter();
 
   // Close the mobile menu on route change / escape, and stop background
-  // scroll while it's open — small details, but a menu that traps scroll
+  // scroll while it's open -- small details, but a menu that traps scroll
   // or survives a navigation reads as broken.
   useEffect(() => {
     if (!mobileOpen) return;
@@ -38,6 +98,13 @@ export default function Header() {
       document.body.style.overflow = "";
     };
   }, [mobileOpen]);
+
+  async function handleMobileSignOut() {
+    await signOut();
+    setMobileOpen(false);
+    router.push("/");
+    router.refresh();
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -66,12 +133,23 @@ export default function Header() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/signup" />}>
-            Sign in
-          </Button>
-          <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/generate" />}>
-            Generate free
-          </Button>
+          {isPending ? null : user ? (
+            <>
+              <ProfileMenu name={user.name ?? user.email} email={user.email} image={user.image} />
+              <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/generate" />}>
+                Generate free
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/signup" />}>
+                Sign in
+              </Button>
+              <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/generate" />}>
+                Generate free
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -99,21 +177,48 @@ export default function Header() {
               </a>
             ))}
             <div className="mt-4 flex flex-col gap-2.5">
-              <Button
-                variant="outline"
-                className="w-full justify-center"
-                nativeButton={false}
-                render={<Link href="/signup" onClick={() => setMobileOpen(false)} />}
-              >
-                Sign in
-              </Button>
-              <Button
-                className="w-full justify-center"
-                nativeButton={false}
-                render={<Link href="/generate" onClick={() => setMobileOpen(false)} />}
-              >
-                Generate free
-              </Button>
+              {isPending ? null : user ? (
+                <>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-center"
+                    nativeButton={false}
+                    render={<Link href="/dashboard" onClick={() => setMobileOpen(false)} />}
+                  >
+                    <LayoutGrid className="size-4" data-icon="inline-start" />
+                    Dashboard
+                  </Button>
+                  <Button
+                    className="w-full justify-center"
+                    nativeButton={false}
+                    render={<Link href="/generate" onClick={() => setMobileOpen(false)} />}
+                  >
+                    Generate free
+                  </Button>
+                  <Button variant="ghost" className="w-full justify-center" onClick={handleMobileSignOut}>
+                    <LogOut className="size-4" data-icon="inline-start" />
+                    Sign out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-center"
+                    nativeButton={false}
+                    render={<Link href="/signup" onClick={() => setMobileOpen(false)} />}
+                  >
+                    Sign in
+                  </Button>
+                  <Button
+                    className="w-full justify-center"
+                    nativeButton={false}
+                    render={<Link href="/generate" onClick={() => setMobileOpen(false)} />}
+                  >
+                    Generate free
+                  </Button>
+                </>
+              )}
             </div>
           </nav>
         </div>
