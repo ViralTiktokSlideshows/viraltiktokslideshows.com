@@ -27,6 +27,22 @@ const RESOLUTION = "1440x2560";
 // off rather than leaving "Building your slideshow…" spinning forever.
 const REQUEST_TIMEOUT_MS = 45_000;
 
+// Ideogram's pricing page quotes per-image cost by model + rendering
+// speed, and this is the v4 TURBO rate specifically — NOT the v3 Turbo
+// rate ($0.03) that's the one most people land on first, since v3 and v4
+// are priced separately and v4 is the newer/pricier model. Re-check this
+// against the current v4 pricing table before trusting the totals these
+// logs report; it's a display estimate, not a value Ideogram's API
+// actually returns anywhere in the response.
+const ESTIMATED_COST_PER_IMAGE_USD = 0.08;
+
+// Process-lifetime only — resets on every deploy/restart, so treat this as
+// "spend since the server last started," not a running account balance.
+// Good enough for spotting a burst of unexpected volume in the logs;
+// Ideogram's own dashboard is still the source of truth for real balance.
+let processImageCount = 0;
+let processEstimatedCostUsd = 0;
+
 type IdeogramImageObject = {
   url: string | null;
   is_image_safe: boolean;
@@ -44,7 +60,13 @@ function buildImagePrompt(slideText: string): string {
   return `A vertical, mobile-first background photo for a TikTok slideshow slide. Slide topic: "${slideText}". Minimal and cinematic, realistic photography style, no embedded text, no captions, no watermarks, no logos — the image is a backdrop only, text gets overlaid separately.`;
 }
 
-export async function generateSlideImage(slideText: string): Promise<string> {
+// `context` is a free-text label for where this call came from (e.g.
+// "generateSlideshow:hook" vs "fillRemainingSlideImages:bulk") — purely
+// for the cost logs below, so a spike in spend can be traced back to which
+// code path is generating the volume without guessing.
+export async function generateSlideImage(slideText: string, context = "unlabeled"): Promise<string> {
+  const start = Date.now();
+
   const form = new FormData();
   form.append("text_prompt", buildImagePrompt(slideText));
   form.append("rendering_speed", "TURBO");
@@ -89,7 +111,19 @@ export async function generateSlideImage(slideText: string): Promise<string> {
   // Ephemeral Ideogram URL -> permanent R2 URL, immediately, before it can
   // expire. Key is unique per generation; no need to reuse/dedupe.
   const key = `slides/${crypto.randomUUID()}.png`;
-  return persistImageToR2(image.url, key);
+  const url = await persistImageToR2(image.url, key);
+
+  const durationMs = Date.now() - start;
+  processImageCount += 1;
+  processEstimatedCostUsd += ESTIMATED_COST_PER_IMAGE_USD;
+
+  console.log(
+    `[ideogram:cost] context=${context} resolution=${image.resolution} durationMs=${durationMs} ` +
+      `estCost=$${ESTIMATED_COST_PER_IMAGE_USD.toFixed(3)} processTotalImages=${processImageCount} ` +
+      `processEstTotal=$${processEstimatedCostUsd.toFixed(2)} slideText="${slideText.slice(0, 60)}"`,
+  );
+
+  return url;
 }
 
 // Generates images for multiple slides in parallel. Any single failure
@@ -99,21 +133,33 @@ export async function generateSlideImage(slideText: string): Promise<string> {
 // paid unlock over.
 export async function generateSlideImages(
   slides: { index: number; text: string }[],
+  context = "unlabeled",
 ): Promise<Map<number, string>> {
+  const batchStart = Date.now();
+
   const results = await Promise.allSettled(
     slides.map(async (slide) => ({
       index: slide.index,
-      url: await generateSlideImage(slide.text),
+      url: await generateSlideImage(slide.text, context),
     })),
   );
 
   const images = new Map<number, string>();
+  let failures = 0;
   for (const result of results) {
     if (result.status === "fulfilled") {
       images.set(result.value.index, result.value.url);
     } else {
+      failures += 1;
       console.error("Slide image generation failed", result.reason);
     }
   }
+
+  console.log(
+    `[ideogram:cost] batch complete context=${context} requested=${slides.length} ` +
+      `succeeded=${images.size} failed=${failures} estBatchCost=$${(images.size * ESTIMATED_COST_PER_IMAGE_USD).toFixed(3)} ` +
+      `batchDurationMs=${Date.now() - batchStart}`,
+  );
+
   return images;
 }

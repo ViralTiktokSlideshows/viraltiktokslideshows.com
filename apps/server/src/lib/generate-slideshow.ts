@@ -1,6 +1,11 @@
 import { generateSlideImages } from "./ideogram";
 import { generateSlideshowText, type SlideFormat } from "./openrouter";
 
+// Pexels wiring (stock-photos.ts) is built but deliberately not called
+// yet — paused to add cost logging first and see real Ideogram spend
+// numbers before changing the image pipeline. See fillRemainingSlideImages
+// below.
+
 export type GeneratedSlide = { index: number; text: string; imageUrl?: string };
 
 export type GeneratedSlideshow = {
@@ -27,7 +32,7 @@ export async function generateSlideshow(
     return { hook, slideCount: slides.length, slides };
   }
 
-  const hookImages = await generateSlideImages([hookSlide]);
+  const hookImages = await generateSlideImages([hookSlide], "generateSlideshow:hook");
   const hookImageUrl = hookImages.get(hookSlide.index);
 
   const enrichedSlides: GeneratedSlide[] = slides.map((slide) =>
@@ -47,7 +52,7 @@ export async function fillRemainingSlideImages(
   const missing = slides.filter((slide) => !slide.imageUrl);
   if (missing.length === 0) return slides;
 
-  const images = await generateSlideImages(missing);
+  const images = await generateSlideImages(missing, "fillRemainingSlideImages:bulk");
   return slides.map((slide) =>
     images.has(slide.index) ? { ...slide, imageUrl: images.get(slide.index) } : slide,
   );

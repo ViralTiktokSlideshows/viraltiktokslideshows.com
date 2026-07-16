@@ -48,8 +48,16 @@ export const env = createEnv({
     OPENROUTER_API_KEY: z.string().min(1),
 
     // Ideogram (slide background images, v4 generate endpoint) — see
-    // apps/server/src/lib/ideogram.ts.
+    // apps/server/src/lib/ideogram.ts. Only used for each free-preview
+    // hook slide now; bulk post-unlock images moved to Pexels (below) to
+    // cut per-slideshow image cost.
     IDEOGRAM_API_KEY: z.string().min(1),
+
+    // Pexels (free stock-photo search) — see apps/server/src/lib/stock-photos.ts.
+    // Backs every non-hook slide image after a paid unlock. Optional: if
+    // unset, fillRemainingSlideImages falls back to Ideogram for everything,
+    // same as before this integration existed.
+    PEXELS_API_KEY: z.string().min(1).optional(),
 
     // Cloudflare R2 (S3-compatible) — persistent storage for Ideogram
     // images, which are only served from ephemeral, time-limited URLs. See
