@@ -1,6 +1,10 @@
 "use client";
 
-import { SLIDE_TEXT_STYLE } from "@/components/generate/slide-text-style";
+import {
+  SLIDE_TEXT_STYLE,
+  textBlockTop,
+  type SlideTextPosition,
+} from "@/components/generate/slide-text-style";
 
 // Draws the same bold/stroked headline treatment used in the live phone
 // preview (SlideshowPhonePreview) directly onto a slide's background image
@@ -49,10 +53,7 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
 // Neither img.onload/onerror nor document.fonts.ready are guaranteed to
 // fire in every browser/decode-failure edge case -- without a hard ceiling
 // on each, one stuck slide hangs the whole download with the spinner just
-// spinning forever and nothing in the server logs past that slide's fetch
-// (which is exactly what this looked like: two slides' image requests
-// logged, then silence -- the third slide's fetch never fired because the
-// second one never finished composing).
+// spinning forever and nothing in the server logs past that slide's fetch.
 const IMAGE_LOAD_TIMEOUT_MS = 15_000;
 const FONTS_READY_TIMEOUT_MS = 5_000;
 
@@ -78,7 +79,11 @@ function loadImage(blob: Blob): Promise<HTMLImageElement> {
   });
 }
 
-export async function composeSlideImage(backgroundBlob: Blob, text: string): Promise<Blob> {
+export async function composeSlideImage(
+  backgroundBlob: Blob,
+  text: string,
+  textPosition: SlideTextPosition = "top",
+): Promise<Blob> {
   const img = await loadImage(backgroundBlob);
 
   // Canvas text needs the font already loaded to measure/draw correctly --
@@ -107,7 +112,6 @@ export async function composeSlideImage(backgroundBlob: Blob, text: string): Pro
   const lineHeight = fontSize * SLIDE_TEXT_STYLE.lineHeightRatio;
   const maxWidth = canvas.width * SLIDE_TEXT_STYLE.maxWidthRatio;
   const strokeWidth = fontSize * SLIDE_TEXT_STYLE.strokeWidthRatio;
-  const top = canvas.height * SLIDE_TEXT_STYLE.topOffsetRatio;
 
   ctx.font = `${SLIDE_TEXT_STYLE.fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = "center";
@@ -117,6 +121,9 @@ export async function composeSlideImage(backgroundBlob: Blob, text: string): Pro
 
   const lines = wrapLines(ctx, text, maxWidth);
   const centerX = canvas.width / 2;
+  // The wrapped block's total height, used to anchor it top/center/bottom.
+  const blockHeight = lines.length * lineHeight;
+  const top = textBlockTop(textPosition, canvas.height, blockHeight);
 
   for (const [i, line] of lines.entries()) {
     const y = top + fontSize + i * lineHeight;

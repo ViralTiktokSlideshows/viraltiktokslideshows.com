@@ -1,8 +1,25 @@
 import { generateSlideImages } from "./ideogram";
-import { generateSlideshowText, type SlideFormat } from "./openrouter";
+import { generateSlideshowText, type SlideFormat, type SlideTextPosition } from "./openrouter";
 import { generateStockSlideImages } from "./stock-photos";
 
-export type GeneratedSlide = { index: number; text: string; imageUrl?: string };
+// The slide shape that flows through the whole app and gets stored on the
+// Purchase row: the overlay text, its per-slide placement, the described
+// background photo concept, and (once generated) the R2 image URL.
+//   - `visual` and `textPosition` come from OpenRouter (see openrouter.ts):
+//     `visual` drives what photo is searched/generated, `textPosition`
+//     drives where the client draws the text. Both are optional so a
+//     degraded model response still produces renderable slides.
+//   - `visual` is server-only in practice (the client never needs it), but
+//     it rides along on the slide object through checkout so
+//     fillRemainingSlideImages still has it when it generates the paid
+//     slides' images.
+export type GeneratedSlide = {
+  index: number;
+  text: string;
+  visual?: string;
+  textPosition?: SlideTextPosition;
+  imageUrl?: string;
+};
 
 export type GeneratedSlideshow = {
   hook: string;
@@ -32,6 +49,10 @@ export async function generateSlideshow(
     return { hook, slideCount: slides.length, slides };
   }
 
+  // Search Pexels using the slide's *visual* concept (e.g. "person alone
+  // scrolling phone dark room"), not its overlay text -- searching the text
+  // ("Most viral advice is a lie") matches no stock photo. Falls back to
+  // Ideogram if Pexels has no hit for that concept.
   let hookImages = await generateStockSlideImages([hookSlide]);
   if (!hookImages.has(hookSlide.index)) {
     hookImages = await generateSlideImages([hookSlide], "generateSlideshow:hook-fallback");
@@ -57,6 +78,11 @@ export async function generateSlideshow(
 // $2 of revenue, or against a plan subscription already being paid for,
 // is a real margin; spending the same on someone who hasn't committed to
 // anything (the free-preview path above) isn't.
+//
+// Each missing slide carries its own `visual` and `textPosition` from
+// OpenRouter, so every generated background is built for that specific
+// slide's concept and composition (see ideogram.ts's buildImagePrompt) --
+// not one generic look repeated across the deck.
 export async function fillRemainingSlideImages(
   slides: GeneratedSlide[],
 ): Promise<GeneratedSlide[]> {
