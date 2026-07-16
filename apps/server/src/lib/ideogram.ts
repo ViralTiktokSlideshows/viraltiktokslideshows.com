@@ -108,19 +108,44 @@ export async function generateSlideImage(slideText: string, context = "unlabeled
     throw new Error("Ideogram returned no safe image");
   }
 
+  // Ideogram bills as soon as this response comes back with a real image --
+  // whatever happens next (our own R2 upload) doesn't change that. Log the
+  // cost here, not after persistImageToR2, so a downstream R2 failure (slow
+  // network, timeout, etc.) doesn't make a real charge invisible to these
+  // logs. This was a real gap: a generation that succeeded here but then
+  // failed to persist used to show up as $0 spent, when Ideogram's own
+  // dashboard had already billed it.
+  const genDurationMs = Date.now() - start;
+  processImageCount += 1;
+  processEstimatedCostUsd += ESTIMATED_COST_PER_IMAGE_USD;
+  console.log(
+    `[ideogram:cost] BILLED context=${context} resolution=${image.resolution} genDurationMs=${genDurationMs} ` +
+      `estCost=$${ESTIMATED_COST_PER_IMAGE_USD.toFixed(3)} processTotalImages=${processImageCount} ` +
+      `processEstTotal=$${processEstimatedCostUsd.toFixed(2)} slideText="${slideText.slice(0, 60)}"`,
+  );
+
   // Ephemeral Ideogram URL -> permanent R2 URL, immediately, before it can
   // expire. Key is unique per generation; no need to reuse/dedupe.
   const key = `slides/${crypto.randomUUID()}.png`;
-  const url = await persistImageToR2(image.url, key);
-
-  const durationMs = Date.now() - start;
-  processImageCount += 1;
-  processEstimatedCostUsd += ESTIMATED_COST_PER_IMAGE_USD;
+  let url: string;
+  try {
+    url = await persistImageToR2(image.url, key);
+  } catch (err) {
+    // The Ideogram spend above already happened and can't be undone -- this
+    // is a paid-for image getting thrown away because our own storage step
+    // failed, not Ideogram's fault. Flagged distinctly from a generation
+    // failure so it's obvious in the logs that this one cost money even
+    // though the slide ends up with no image.
+    console.error(
+      `[ideogram:cost] PAID BUT LOST context=${context} — Ideogram generated and billed this image, ` +
+        `but persisting it to R2 failed, so it won't be used`,
+      err,
+    );
+    throw err;
+  }
 
   console.log(
-    `[ideogram:cost] context=${context} resolution=${image.resolution} durationMs=${durationMs} ` +
-      `estCost=$${ESTIMATED_COST_PER_IMAGE_USD.toFixed(3)} processTotalImages=${processImageCount} ` +
-      `processEstTotal=$${processEstimatedCostUsd.toFixed(2)} slideText="${slideText.slice(0, 60)}"`,
+    `[ideogram:cost] persisted context=${context} totalDurationMs=${Date.now() - start}`,
   );
 
   return url;
@@ -136,6 +161,7 @@ export async function generateSlideImages(
   context = "unlabeled",
 ): Promise<Map<number, string>> {
   const batchStart = Date.now();
+  const billedCostBefore = processEstimatedCostUsd;
 
   const results = await Promise.allSettled(
     slides.map(async (slide) => ({
@@ -155,9 +181,16 @@ export async function generateSlideImages(
     }
   }
 
+  // Two different numbers on purpose: `billedThisBatch` is real Ideogram
+  // spend (tracked in generateSlideImage the moment Ideogram returns an
+  // image, win or lose downstream) — `usable` is how many slides actually
+  // got a working image out of it. A gap between them (billed > usable *
+  // rate) means images were generated and paid for, then lost to an R2
+  // failure — see the "PAID BUT LOST" log above for which ones.
+  const billedThisBatch = processEstimatedCostUsd - billedCostBefore;
   console.log(
     `[ideogram:cost] batch complete context=${context} requested=${slides.length} ` +
-      `succeeded=${images.size} failed=${failures} estBatchCost=$${(images.size * ESTIMATED_COST_PER_IMAGE_USD).toFixed(3)} ` +
+      `usable=${images.size} failed=${failures} billedThisBatch=$${billedThisBatch.toFixed(3)} ` +
       `batchDurationMs=${Date.now() - batchStart}`,
   );
 
