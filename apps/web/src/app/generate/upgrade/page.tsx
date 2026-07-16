@@ -32,6 +32,12 @@ function UpgradeContent() {
   const resumedRef = useRef(false);
 
   async function handleUpgrade(tier: PlanTier) {
+    // Same belt-and-suspenders guard as reveal-step.tsx's "Try for $2" --
+    // the disabled prop on the buttons below is a paint behind this click,
+    // so a fast double-click/tap can still fire a second subscribeToPlan()
+    // call (a second, unused Dodo checkout session) before it's committed.
+    if (loadingTier) return;
+
     setError("");
 
     if (!user) {

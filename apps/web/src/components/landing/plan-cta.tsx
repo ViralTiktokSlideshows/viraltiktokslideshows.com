@@ -27,6 +27,12 @@ export function PlanCTA({
   const [error, setError] = useState("");
 
   async function handleClick() {
+    // Same belt-and-suspenders guard as reveal-step.tsx's "Try for $2" --
+    // the disabled prop below is a paint behind this click, so a fast
+    // double-click/tap can still fire a second subscribeToPlan() call (a
+    // second, unused Dodo checkout session) before it's committed.
+    if (loading) return;
+
     setError("");
 
     if (!user) {
