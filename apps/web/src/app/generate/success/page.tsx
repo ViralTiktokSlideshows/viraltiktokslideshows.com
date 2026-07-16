@@ -84,6 +84,12 @@ function SuccessContent() {
   const [copied, setCopied] = useState(false);
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  // Same dialog, two doors in: after a download, or on the way to
+  // generating another one. Drives both the copy (see upgradeCopy below)
+  // and where closing the dialog actually sends someone.
+  const [upgradeModalIntent, setUpgradeModalIntent] = useState<"download" | "generate-again">(
+    "download",
+  );
   // Whether this unlock is a repeat purchase (see hasPriorPurchase on
   // /api/checkout/status) -- swaps the upgrade pitch from a first-timer
   // intro to a "you're already paying twice, here's what a plan saves you"
@@ -183,6 +189,7 @@ function SuccessContent() {
         if (hasPlan) {
           router.push("/dashboard");
         } else {
+          setUpgradeModalIntent("download");
           setShowUpgradeModal(true);
         }
       } catch (error) {
@@ -191,14 +198,63 @@ function SuccessContent() {
       }
     }
 
-    // onOpenChange fires for every dismissal path (X, backdrop, Escape) as
-    // well as the controlled setShowUpgradeModal(true) above -- only route
-    // to the dashboard on the way *out*, once someone's actually done with
-    // the popup, not on the render that opens it.
+    // "Generate another" normally just navigates to /generate -- intercept
+    // that for anyone without a plan and show the same upgrade dialog first,
+    // since this is the other moment (besides right after a download) where
+    // someone's clearly about to rack up a second/third $2 unlock. Plan
+    // subscribers have nothing to upsell here, so the Link navigates
+    // straight through for them.
+    function handleGenerateAnotherClick(event: React.MouseEvent) {
+      if (hasPlan) return;
+      event.preventDefault();
+      setUpgradeModalIntent("generate-again");
+      setShowUpgradeModal(true);
+    }
+
+    // onOpenChange fires for every dismissal path (X, the new "continue"
+    // button, backdrop, Escape) as well as the controlled
+    // setShowUpgradeModal(true) calls above -- only route on the way *out*,
+    // once someone's actually done with the popup, not on the render that
+    // opens it. Destination depends on which door they came in through.
     function handleUpgradeModalChange(open: boolean) {
       setShowUpgradeModal(open);
-      if (!open) router.push("/dashboard");
+      if (!open) {
+        router.push(upgradeModalIntent === "generate-again" ? "/generate" : "/dashboard");
+      }
     }
+
+    const upgradeCopy =
+      upgradeModalIntent === "generate-again"
+        ? isRepeatBuyer
+          ? {
+              title: "Still paying $2 a slideshow?",
+              description:
+                "You've unlocked more than one at $2 each. A plan cuts that to $1 — starting at $19.99/mo for 20 slideshows, so this next one (and every one after) costs less.",
+              cta: "See plans",
+              continueLabel: "Continue without a plan",
+            }
+          : {
+              title: "Making another? Save 50% with a plan.",
+              description:
+                "One-off unlocks are $2 each. A plan drops that to $1 a slideshow — starting at $19.99/mo for 20, cheaper starting with this next one.",
+              cta: "See plans",
+              continueLabel: "Continue without a plan",
+            }
+        : isRepeatBuyer
+          ? {
+              title: "Choose a plan to save 50%",
+              description:
+                "You've paid $2 a slideshow more than once now. A plan cuts that to $1 each — starting at $19.99/mo for 20 slideshows.",
+              cta: "Choose a plan",
+              continueLabel: "Continue to dashboard",
+            }
+          : {
+              title: "Loved your first slideshow?",
+              description:
+                "That one cost $2. A plan drops the price to $1 a slideshow — plans start at $19.99/mo for 20 slideshows.",
+              cta: "Select a plan",
+              continueLabel: "Continue to dashboard",
+            };
 
     return (
       <>
@@ -310,6 +366,7 @@ function SuccessContent() {
                       className="gap-1.5"
                       nativeButton={false}
                       render={<Link href="/generate" />}
+                      onClick={handleGenerateAnotherClick}
                     >
                       <Plus className="size-4" data-icon="inline-start" />
                       Generate another
@@ -347,13 +404,9 @@ function SuccessContent() {
                 <Zap className="size-5 text-spark" />
               </span>
 
-              <AlertDialogTitle className="mt-4 text-bone">
-                {isRepeatBuyer ? "Choose a plan to save 50%" : "Loved your first slideshow?"}
-              </AlertDialogTitle>
+              <AlertDialogTitle className="mt-4 text-bone">{upgradeCopy.title}</AlertDialogTitle>
               <AlertDialogDescription className="mt-1.5 text-bone/70">
-                {isRepeatBuyer
-                  ? "You've paid $2 a slideshow more than once now. A plan cuts that to $1 each — starting at $19.99/mo for 20 slideshows."
-                  : "That one cost $2. A plan drops the price to $1 a slideshow — plans start at $19.99/mo for 20 slideshows."}
+                {upgradeCopy.description}
               </AlertDialogDescription>
 
               <Button
@@ -363,8 +416,12 @@ function SuccessContent() {
                 render={<Link href="/generate/upgrade" />}
               >
                 <Zap className="size-4" data-icon="inline-start" />
-                {isRepeatBuyer ? "Choose a plan" : "Select a plan"}
+                {upgradeCopy.cta}
               </Button>
+
+              <AlertDialogClose className="mt-3 w-full text-center text-xs font-medium text-bone/50 transition-colors hover:text-bone/80">
+                {upgradeCopy.continueLabel}
+              </AlertDialogClose>
             </div>
           </AlertDialogPopup>
         </AlertDialog>
