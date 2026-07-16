@@ -1,10 +1,11 @@
 import { env } from "@viraltiktokslideshows/env/server";
 
+import type { SlideTextPosition } from "./openrouter";
 import { persistImageToR2 } from "./r2";
 
 // Ideogram v4 generate endpoint — background images for slide cards. The
 // app overlays its own text on top (see SlideshowPhonePreview and the
-// tilted card treatments), so prompts explicitly ask for no embedded text.
+// canvas compositor), so prompts explicitly ask for no embedded text.
 //
 // Auth is a plain `Api-Key` header (not `Authorization: Bearer`), and the
 // request body is multipart/form-data, not JSON — both per Ideogram's own
@@ -56,26 +57,58 @@ type IdeogramResponse = {
   data: IdeogramImageObject[];
 };
 
-// Composition guidance below is modeled on real viral book/lifestyle
-// slideshow accounts (e.g. subject shot low-and-center against a plain
-// wall, or a lifestyle scene with a soft/blurred upper region) — the
-// common thread is a visually quiet upper third with the actual subject
-// occupying the lower two-thirds, so overlaid text never fights the
-// subject for attention. See SlideshowPhonePreview for where the text
-// itself gets placed against this composition.
-function buildImagePrompt(slideText: string): string {
-  return `A vertical, mobile-first background photo for a TikTok slideshow slide. Slide topic: "${slideText}". Minimal and cinematic, realistic photography style, no embedded text, no captions, no watermarks, no logos — the image is a backdrop only, text gets overlaid separately. Compose the shot with the main subject low-and-center, occupying the lower two-thirds of the frame — the upper third should be visually quiet and uncluttered (a plain wall, open sky, or soft out-of-focus background), with no busy detail there, so bold overlay text can sit in that space without competing with the subject.`;
+type ImageSlide = {
+  index: number;
+  text: string;
+  visual?: string;
+  textPosition?: SlideTextPosition;
+};
+
+// Where the overlay text will be drawn, and therefore which region of the
+// generated photo has to stay visually quiet so the text reads. The subject
+// is deliberately pushed to the OPPOSITE end from the text: text at the top
+// -> subject low in frame; text at the bottom -> subject high, open
+// foreground; text centered -> subject offset toward an edge with the
+// middle kept calm. Keeping this in lockstep with where the client actually
+// draws the text (see slide-text-style.ts) is what makes the text land on
+// empty space instead of across someone's face.
+function compositionForPosition(position: SlideTextPosition | undefined): string {
+  switch (position) {
+    case "bottom":
+      return "Compose the shot with the main subject high in the frame, filling roughly the upper two-thirds, leaving the lower third calm and uncluttered (open floor, a plain surface, soft foreground, or gentle shadow) so bold text can sit along the bottom without covering the subject.";
+    case "center":
+      return "Compose the shot with the main subject weighted toward the top or one side, leaving a calm, low-detail band across the middle of the frame (soft background, negative space, or gentle gradient) so bold text can sit centered without competing with the subject.";
+    case "top":
+    default:
+      return "Compose the shot with the main subject low-and-centered, filling roughly the lower two-thirds, and keep the upper third visually quiet and uncluttered (a plain wall, open sky, or soft out-of-focus background) so bold text can sit up top without competing with the subject.";
+  }
+}
+
+// The background photo for one slide. Built from the slide's own `visual`
+// concept (the described scene, e.g. "stacks of cash on marble counter"),
+// NOT its overlay text -- so the image is of an actual thing that suits the
+// slide, and every slide in a deck gets its own distinct shot rather than a
+// single look stamped across all of them. Composition is tuned per slide to
+// leave that slide's text zone empty.
+function buildImagePrompt(slide: ImageSlide): string {
+  // If the model didn't supply a visual concept, fall back to a neutral,
+  // on-brand descriptor rather than dumping the slide's sentence into the
+  // image prompt (which would render as a literal, text-in-image mess).
+  const scene = slide.visual?.trim() || "a clean, minimal, on-brand lifestyle scene";
+  const composition = compositionForPosition(slide.textPosition);
+
+  return `A vertical, mobile-first background photo for a TikTok slideshow slide. Subject of the photo: ${scene}. Realistic, cinematic photography — natural light, shallow depth of field, high quality. Absolutely no embedded text, captions, watermarks, logos, charts, or infographics; this image is a backdrop only, the text gets overlaid separately by the app. ${composition}`;
 }
 
 // `context` is a free-text label for where this call came from (e.g.
 // "generateSlideshow:hook" vs "fillRemainingSlideImages:bulk") — purely
 // for the cost logs below, so a spike in spend can be traced back to which
 // code path is generating the volume without guessing.
-export async function generateSlideImage(slideText: string, context = "unlabeled"): Promise<string> {
+export async function generateSlideImage(slide: ImageSlide, context = "unlabeled"): Promise<string> {
   const start = Date.now();
 
   const form = new FormData();
-  form.append("text_prompt", buildImagePrompt(slideText));
+  form.append("text_prompt", buildImagePrompt(slide));
   form.append("rendering_speed", "TURBO");
   form.append("resolution", RESOLUTION);
 
@@ -128,7 +161,7 @@ export async function generateSlideImage(slideText: string, context = "unlabeled
   console.log(
     `[ideogram:cost] BILLED context=${context} resolution=${image.resolution} genDurationMs=${genDurationMs} ` +
       `estCost=$${ESTIMATED_COST_PER_IMAGE_USD.toFixed(3)} processTotalImages=${processImageCount} ` +
-      `processEstTotal=$${processEstimatedCostUsd.toFixed(2)} slideText="${slideText.slice(0, 60)}"`,
+      `processEstTotal=$${processEstimatedCostUsd.toFixed(2)} slideText="${slide.text.slice(0, 60)}"`,
   );
 
   // Ephemeral Ideogram URL -> permanent R2 URL, immediately, before it can
@@ -164,7 +197,7 @@ export async function generateSlideImage(slideText: string, context = "unlabeled
 // losing one background image out of seven isn't worth failing an entire
 // paid unlock over.
 export async function generateSlideImages(
-  slides: { index: number; text: string }[],
+  slides: ImageSlide[],
   context = "unlabeled",
 ): Promise<Map<number, string>> {
   const batchStart = Date.now();
@@ -173,7 +206,7 @@ export async function generateSlideImages(
   const results = await Promise.allSettled(
     slides.map(async (slide) => ({
       index: slide.index,
-      url: await generateSlideImage(slide.text, context),
+      url: await generateSlideImage(slide, context),
     })),
   );
 

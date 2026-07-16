@@ -4,7 +4,29 @@ import { env } from "@viraltiktokslideshows/env/server";
 // (OpenAI-compatible chat completions API). No SDK — this is a single
 // endpoint with a plain fetch, not worth a dependency for.
 
-export type GeneratedSlideText = { index: number; text: string };
+// Where a slide's overlay text sits on the frame. Chosen per-slide by the
+// model (see the system prompt) so a deck isn't one rigid layout repeated
+// 8 times -- text goes wherever the slide's own background photo leaves
+// the most empty room. Mirrored client-side in
+// apps/web/src/components/generate/slide-text-style.ts (kept as a
+// duplicated union there rather than a shared package, same reasoning as
+// SlideFormat below).
+export type SlideTextPosition = "top" | "center" | "bottom";
+
+const TEXT_POSITIONS: readonly SlideTextPosition[] = ["top", "center", "bottom"];
+
+export type GeneratedSlideText = {
+  index: number;
+  text: string;
+  // A concrete, literal description of the *background photo* this slide
+  // should have -- a real scene a photographer could shoot, NOT the slide's
+  // message. This is what actually gets searched on Pexels / handed to
+  // Ideogram (see generate-slideshow.ts). Optional because a degraded model
+  // response might omit it; downstream falls back to keyword-extracting the
+  // slide text in that case (see stock-photos.ts).
+  visual?: string;
+  textPosition?: SlideTextPosition;
+};
 
 export type GeneratedSlideshowText = {
   hook: string;
@@ -29,18 +51,40 @@ type OpenRouterResponse = {
 // indefinitely — cut it off and let the caller surface a real error.
 const REQUEST_TIMEOUT_MS = 30_000;
 
-const BASE_SYSTEM_PROMPT = `You write short, punchy TikTok slideshow scripts.
+// The core instruction set. The single most important idea here: the model
+// writes TWO different things per slide that must not be confused --
+//   1. `text`   = the punchy words shown ON the slide.
+//   2. `visual` = a plain description of the PHOTO behind those words.
+// Early versions only asked for text, and the image layer then searched
+// Pexels using the slide's own sentence ("Most viral advice is a lie"),
+// which matches no stock photo and returned nothing. A slide's words and a
+// slide's background are different jobs: "Ego is the enemy" is good text; the
+// photo behind it is "a lone climber on a mountain ridge," not the sentence.
+const BASE_SYSTEM_PROMPT = `You are a scriptwriter AND an art director for viral TikTok photo-slideshows. For one idea you produce a short deck where every slide has punchy overlay text AND a described background photo chosen specifically for that slide.
 
 Return ONLY a JSON object, no markdown fences, no commentary, matching this exact shape:
-{"slides": ["...", "...", "..."]}
+{"slides": [{"text": "...", "visual": "...", "textPosition": "top"}, ...]}
 
-Rules:
+## text (the words shown on the slide)
 - 6 to 8 slides total.
 - Slide 1 is the hook: it must earn the next slide in under a second — a bold claim, a specific number, a "nobody tells you" angle, or a direct question. No generic openers.
-- Each slide is one short sentence: punchy, no hashtags, no emoji, no slide numbers or labels in the text itself.
-- Hard cap: 8 words / 55 characters per slide, no exceptions. This text gets rendered as large, bold overlay text on top of a photo — think "Ego is the enemy" or "Force consistency," not a full sentence with clauses. If an idea needs more than that to land, cut it down to its sharpest phrase rather than shortening word-by-word.
-- The deck should build: hook, tension/context, 3-5 payoff/insight slides, a closing slide that lands the point.
-- Write in a confident, conversational voice — like a smart friend explaining something, not a corporate caption.`;
+- Each slide's text is one short punchy line: no hashtags, no emoji, no slide numbers or labels.
+- Hard cap: 8 words / 55 characters per slide. This renders as large bold overlay text on a photo — think "Ego is the enemy" or "Force consistency," not a full sentence with clauses. If an idea needs more room, cut it to its sharpest phrase.
+- The deck should build: hook, tension/context, 3-5 payoff/insight slides, a closing line that lands the point.
+- Confident, conversational voice — a smart friend explaining something, not a corporate caption.
+
+## visual (the background PHOTO for that slide) — READ CAREFULLY
+- This is NOT the slide's message. It is a concrete, literal, physically-photographable SCENE or OBJECT that a stock-photo search would actually return, chosen to match the slide's meaning or mood.
+- 3 to 7 words, plain and searchable: real nouns, a setting, maybe a lighting/mood word. Describe what is IN the frame, like a photographer's shot list.
+- NEVER put abstract concepts, the topic name, or the slide's own words in the visual. If the slide is about "viral advice being a lie," the visual is something like "person alone scrolling phone dark room" — a scene that evokes it — never "viral advice lie."
+- Pick visuals that fit the TOPIC. A finance deck pulls from money and status imagery (stacks of cash on a table, keys to a luxury car, a modern glass mansion at dusk, a rolex on a wrist). A fitness deck pulls from training imagery (athlete tying running shoes at sunrise, chalk-covered hands on a barbell, empty gym morning light). A productivity deck: a clean desk with a laptop and coffee, a person writing in a notebook by a window. Always translate the message into a tangible object or scene from that world.
+- No text, words, logos, charts, collages, or infographics in the photo. One clear subject or scene per slide.
+- Vary the visuals across the deck — don't reuse the same subject on every slide.
+
+## textPosition (where the words sit)
+- One of exactly: "top", "center", "bottom".
+- Choose it PER SLIDE based on where the visual's subject sits, so the text lands in the emptiest part of that specific photo. Subject low/centered in frame -> "top". Big open sky, ceiling, or empty area up top -> "bottom". Minimal or evenly-filled scene -> "center".
+- Deliberately vary it across the deck. A deck where every slide is "top" is wrong — different photos have empty room in different places.`;
 
 // Applied invisibly from the signed-in user's Settings > Generation
 // defaults preference (see /api/generate in index.ts) — there's no format
@@ -55,17 +99,14 @@ const FORMAT_DIRECTIVES: Record<SlideFormat, string> = {
     "Style: a bold, opinionated, slightly contrarian voice — like someone dropping an unpopular but well-argued take. The hook slide is a provocative claim, not a question, and the closing slide doubles down rather than softening it.",
 };
 
+type RawSlide = { text: string; visual?: string; textPosition?: SlideTextPosition };
+
 // Single attempt at the OpenRouter call -- pulled out of
 // generateSlideshowText so that function can retry it once on a parse
 // failure (see below) without duplicating the request/parsing logic.
-// Previously, "OpenRouter returned an unusable slide list" was thrown with
-// no record of what the model actually said, so a production failure like
-// this had no way to tell a genuine schema regression apart from an
-// ordinary one-off bad completion (LLMs occasionally return truncated or
-// off-shape JSON even with response_format: json_object, which only
-// guarantees valid JSON, not a specific shape) -- the raw content is now
-// logged (truncated) whenever parsing comes up short, so the next
-// occurrence is diagnosable instead of a bare error string.
+// Whenever parsing comes up short the raw model content is logged
+// (truncated) so a real regression is diagnosable instead of surfacing as
+// a bare "unusable slide list" error string.
 async function attemptGenerate(
   idea: string,
   format: SlideFormat,
@@ -117,24 +158,31 @@ async function attemptGenerate(
     throw new Error("OpenRouter returned no content");
   }
 
-  const slideTexts = parseSlidesJson(content);
-  if (!slideTexts || slideTexts.length < 3) {
+  const rawSlides = parseSlidesJson(content);
+  if (!rawSlides || rawSlides.length < 3) {
     console.error(
-      `[openrouter] unusable slide list (got ${slideTexts?.length ?? 0} slides) -- raw content:`,
+      `[openrouter] unusable slide list (got ${rawSlides?.length ?? 0} slides) -- raw content:`,
       content.slice(0, 500),
     );
     throw new Error("OpenRouter returned an unusable slide list");
   }
 
-  const hookText = slideTexts[0];
+  const slides: GeneratedSlideText[] = rawSlides.map((slide, i) => ({
+    index: i + 1,
+    text: slide.text,
+    visual: slide.visual,
+    // Fall back to rotating top/center/bottom by position so even a
+    // response that omits textPosition still gets per-slide variety rather
+    // than every slide defaulting to the same spot.
+    textPosition: slide.textPosition ?? TEXT_POSITIONS[i % TEXT_POSITIONS.length],
+  }));
+
+  const hookText = slides[0]?.text;
   if (hookText === undefined) {
     throw new Error("OpenRouter returned an unusable slide list");
   }
 
-  return {
-    hook: hookText,
-    slides: slideTexts.map((text, i) => ({ index: i + 1, text })),
-  };
+  return { hook: hookText, slides };
 }
 
 export async function generateSlideshowText(
@@ -146,10 +194,10 @@ export async function generateSlideshowText(
   } catch (err) {
     // One retry, not a loop: this is on the free, unauthenticated
     // /api/generate path, so a stuck upstream shouldn't turn into several
-    // extra OpenRouter calls per visitor. A bad completion (unusable slide
-    // list) is usually a one-off the same request succeeds at on a second
-    // try; a genuine outage or auth failure will just fail the same way
-    // again and surface to the caller as before.
+    // extra OpenRouter calls per visitor. A bad completion is usually a
+    // one-off the same request succeeds at on a second try; a genuine
+    // outage or auth failure will just fail the same way again and surface
+    // to the caller as before.
     console.error("[openrouter] first attempt failed, retrying once", err);
     return await attemptGenerate(idea, format);
   }
@@ -158,7 +206,11 @@ export async function generateSlideshowText(
 // Models occasionally wrap JSON in markdown fences or add stray text
 // around it even when explicitly told not to — strip fences and grab the
 // first {...} block before parsing, rather than trusting the raw string.
-function parseSlidesJson(raw: string): string[] | null {
+// Tolerant on shape: accepts the current object form ({text, visual,
+// textPosition}) and also a legacy bare-string slide ("just the text"), so
+// a partially-off completion still yields usable slides instead of a hard
+// failure.
+function parseSlidesJson(raw: string): RawSlide[] | null {
   let text = raw.trim();
 
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -175,9 +227,25 @@ function parseSlidesJson(raw: string): string[] | null {
     const slides = parsed?.slides;
     if (!Array.isArray(slides)) return null;
 
-    const cleaned = slides
-      .map((s) => (typeof s === "string" ? s.trim() : ""))
-      .filter((s) => s.length > 0);
+    const cleaned: RawSlide[] = [];
+    for (const slide of slides) {
+      if (typeof slide === "string") {
+        const t = slide.trim();
+        if (t) cleaned.push({ text: t });
+        continue;
+      }
+      if (slide && typeof slide === "object" && typeof slide.text === "string") {
+        const t = slide.text.trim();
+        if (!t) continue;
+        const visual = typeof slide.visual === "string" ? slide.visual.trim() : undefined;
+        const position: SlideTextPosition | undefined =
+          typeof slide.textPosition === "string" &&
+          (TEXT_POSITIONS as readonly string[]).includes(slide.textPosition)
+            ? (slide.textPosition as SlideTextPosition)
+            : undefined;
+        cleaned.push({ text: t, visual: visual || undefined, textPosition: position });
+      }
+    }
 
     return cleaned.length > 0 ? cleaned : null;
   } catch {
