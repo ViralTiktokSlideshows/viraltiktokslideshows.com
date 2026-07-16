@@ -15,9 +15,18 @@ export type SlideTextPosition = "top" | "center" | "bottom";
 
 const TEXT_POSITIONS: readonly SlideTextPosition[] = ["top", "center", "bottom"];
 
+// The two real-TikTok overlay-text looks (see the client's
+// slide-text-style.ts): "boxed" = black text in white caption pills,
+// "outlined" = white text with a dark outline. Assigned at random per
+// slide below so a deck mixes both, the way real accounts do.
+export type SlideTextStyle = "boxed" | "outlined";
+
+const TEXT_STYLES: readonly SlideTextStyle[] = ["boxed", "outlined"];
+
 export type GeneratedSlideText = {
   index: number;
   text: string;
+  textStyle?: SlideTextStyle;
   // A concrete, literal description of the *background photo* this slide
   // should have -- a real scene a photographer could shoot, NOT the slide's
   // message. This is what actually gets searched on Pexels / handed to
@@ -175,6 +184,8 @@ async function attemptGenerate(
     // response that omits textPosition still gets per-slide variety rather
     // than every slide defaulting to the same spot.
     textPosition: slide.textPosition ?? TEXT_POSITIONS[i % TEXT_POSITIONS.length],
+    // Random per slide so each deck mixes the boxed and outlined looks.
+    textStyle: TEXT_STYLES[Math.floor(Math.random() * TEXT_STYLES.length)],
   }));
 
   const hookText = slides[0]?.text;
