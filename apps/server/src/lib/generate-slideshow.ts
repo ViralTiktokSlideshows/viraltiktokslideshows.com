@@ -1,5 +1,10 @@
 import { generateSlideImages } from "./ideogram";
-import { generateSlideshowText, type SlideFormat, type SlideTextPosition } from "./openrouter";
+import {
+  generateSlideshowText,
+  type SlideFormat,
+  type SlideTextPosition,
+  type SlideTextStyle,
+} from "./openrouter";
 import { generateStockSlideImages } from "./stock-photos";
 
 // The slide shape that flows through the whole app and gets stored on the
@@ -18,6 +23,7 @@ export type GeneratedSlide = {
   text: string;
   visual?: string;
   textPosition?: SlideTextPosition;
+  textStyle?: SlideTextStyle;
   imageUrl?: string;
 };
 

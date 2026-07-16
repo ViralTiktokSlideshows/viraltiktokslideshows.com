@@ -2,25 +2,20 @@
 
 import {
   SLIDE_TEXT_STYLE,
+  naturalJitter,
   textBlockTop,
   type SlideTextPosition,
+  type SlideTextStyle,
 } from "@/components/generate/slide-text-style";
 
-// Draws the same bold/stroked headline treatment used in the live phone
-// preview (SlideshowPhonePreview) directly onto a slide's background image
-// at full resolution -- this is what actually gets saved/shared, so the
-// file someone posts to TikTok has the text baked in instead of shipping
-// a bare background photo. Runs entirely in the browser's own Canvas 2D
-// API: no server-side image library involved (a native compositing
-// library -- @napi-rs/canvas -- was tried first and crashed on import in
-// a completely standard x86_64 Ubuntu sandbox with a bus error, not
-// something worth risking in a payment-critical download path when the
-// browser already does this reliably).
+// Bakes the slide's overlay text onto its background image at full
+// resolution, in the same two TikTok treatments the live preview uses
+// (see slide-text-style.ts): "boxed" = black text in per-line white pills,
+// "outlined" = white text with a dark outline. Runs entirely in the
+// browser's Canvas 2D API -- no server-side/native image library (a native
+// one, @napi-rs/canvas, crashed on import in the sandbox and isn't worth
+// the risk on a payment path).
 
-// Resolves the actual generated font-family string next/font/local
-// assigned to --font-clash-display (a hashed name, not literally "Clash
-// Display") so canvas text uses the same typeface as the rest of the UI
-// instead of silently falling back to a system font.
 function resolveDisplayFontFamily(): string {
   if (typeof document === "undefined") return "sans-serif";
   const value = getComputedStyle(document.documentElement)
@@ -29,14 +24,10 @@ function resolveDisplayFontFamily(): string {
   return value ? `${value}, sans-serif` : "sans-serif";
 }
 
-// Greedy word-wrap against the canvas's own text measurement -- the same
-// approach any plain-text editor uses, just driven by ctx.measureText
-// instead of DOM layout.
 function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const words = text.split(/\s+/).filter(Boolean);
   const lines: string[] = [];
   let current = "";
-
   for (const word of words) {
     const attempt = current ? `${current} ${word}` : word;
     if (current && ctx.measureText(attempt).width > maxWidth) {
@@ -50,10 +41,24 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return lines.length > 0 ? lines : [text];
 }
 
-// Neither img.onload/onerror nor document.fonts.ready are guaranteed to
-// fire in every browser/decode-failure edge case -- without a hard ceiling
-// on each, one stuck slide hangs the whole download with the spinner just
-// spinning forever and nothing in the server logs past that slide's fetch.
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const radius = Math.min(r, h / 2, w / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
 const IMAGE_LOAD_TIMEOUT_MS = 15_000;
 const FONTS_READY_TIMEOUT_MS = 5_000;
 
@@ -83,15 +88,10 @@ export async function composeSlideImage(
   backgroundBlob: Blob,
   text: string,
   textPosition: SlideTextPosition = "top",
+  textStyle: SlideTextStyle = "boxed",
 ): Promise<Blob> {
   const img = await loadImage(backgroundBlob);
 
-  // Canvas text needs the font already loaded to measure/draw correctly --
-  // unlike DOM text, there's no automatic reflow once a webfont finishes
-  // loading after the fact. document.fonts.ready has been known to never
-  // resolve in some browser/webview edge cases, so this isn't allowed to
-  // block the export indefinitely -- worst case the text draws in a
-  // fallback font for this one image instead of hanging the download.
   if (typeof document !== "undefined" && document.fonts?.ready) {
     await Promise.race([
       document.fonts.ready,
@@ -111,27 +111,59 @@ export async function composeSlideImage(
   const fontSize = Math.round(canvas.width * SLIDE_TEXT_STYLE.fontSizeRatio);
   const lineHeight = fontSize * SLIDE_TEXT_STYLE.lineHeightRatio;
   const maxWidth = canvas.width * SLIDE_TEXT_STYLE.maxWidthRatio;
-  const strokeWidth = fontSize * SLIDE_TEXT_STYLE.strokeWidthRatio;
 
   ctx.font = `${SLIDE_TEXT_STYLE.fontWeight} ${fontSize}px ${fontFamily}`;
   ctx.textAlign = "center";
-  ctx.textBaseline = "alphabetic";
-  ctx.lineJoin = "round";
-  ctx.miterLimit = 2;
+  ctx.textBaseline = "middle";
 
   const lines = wrapLines(ctx, text, maxWidth);
-  const centerX = canvas.width / 2;
-  // The wrapped block's total height, used to anchor it top/center/bottom.
-  const blockHeight = lines.length * lineHeight;
-  const top = textBlockTop(textPosition, canvas.height, blockHeight);
+  // Small hand-placed drift so the text isn't dead-centered and edge-locked.
+  const jitter = naturalJitter(text);
+  const centerX = canvas.width / 2 + jitter.xRatio * canvas.width;
+  const jitterY = jitter.yRatio * canvas.height;
 
-  for (const [i, line] of lines.entries()) {
-    const y = top + fontSize + i * lineHeight;
-    ctx.lineWidth = strokeWidth;
-    ctx.strokeStyle = "black";
-    ctx.strokeText(line, centerX, y);
-    ctx.fillStyle = "white";
-    ctx.fillText(line, centerX, y);
+  if (textStyle === "boxed") {
+    const padX = fontSize * SLIDE_TEXT_STYLE.boxPadXRatio;
+    const padY = fontSize * SLIDE_TEXT_STYLE.boxPadYRatio;
+    const radius = fontSize * SLIDE_TEXT_STYLE.boxRadiusRatio;
+    const gap = fontSize * SLIDE_TEXT_STYLE.boxGapRatio;
+    const pillHeight = fontSize + padY * 2;
+    const blockHeight = lines.length * pillHeight + (lines.length - 1) * gap;
+    const top = textBlockTop(textPosition, canvas.height, blockHeight) + jitterY;
+
+    lines.forEach((line, i) => {
+      const textWidth = ctx.measureText(line).width;
+      const pillWidth = textWidth + padX * 2;
+      const pillY = top + i * (pillHeight + gap);
+      const pillX = centerX - pillWidth / 2;
+      // White pill.
+      roundRectPath(ctx, pillX, pillY, pillWidth, pillHeight, radius);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      // Black text centered in the pill.
+      ctx.fillStyle = "#111111";
+      ctx.fillText(line, centerX, pillY + pillHeight / 2);
+    });
+  } else {
+    const outline = Math.max(1, fontSize * SLIDE_TEXT_STYLE.outlineWidthRatio);
+    const blockHeight = lines.length * lineHeight;
+    const top = textBlockTop(textPosition, canvas.height, blockHeight) + jitterY;
+
+    ctx.lineJoin = "round";
+    ctx.miterLimit = 2;
+    lines.forEach((line, i) => {
+      const y = top + i * lineHeight + lineHeight / 2;
+      // Soft shadow underneath for depth on light backgrounds.
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.45)";
+      ctx.shadowBlur = fontSize * 0.12;
+      ctx.lineWidth = outline;
+      ctx.strokeStyle = "#000000";
+      ctx.strokeText(line, centerX, y);
+      ctx.restore();
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(line, centerX, y);
+    });
   }
 
   return new Promise<Blob>((resolve, reject) => {
