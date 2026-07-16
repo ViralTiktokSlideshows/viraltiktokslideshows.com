@@ -72,7 +72,15 @@ export async function downloadPurchaseZip(purchaseId: string): Promise<void> {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Revoking the object URL synchronously right after click() was the bug:
+  // click() returns before the browser's download manager has necessarily
+  // finished reading from the blob: URL, especially for a multi-MB zip of
+  // full-resolution slide images. Revoke it too early and the download just
+  // hangs indefinitely (or silently never starts) instead of erroring --
+  // which is exactly "click Download, nothing happens" with no console
+  // error to go on. A short delay lets the browser actually grab the bytes
+  // before the URL is torn down.
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
 export function formatRelativeTime(iso: string): string {
