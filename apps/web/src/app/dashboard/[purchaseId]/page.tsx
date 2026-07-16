@@ -96,7 +96,7 @@ export default function SlideshowDetailPage() {
           </Button>
           {downloadState === "error" ? (
             <p className="mt-2 text-xs text-destructive">
-              Couldn&apos;t download — the images may have expired.
+              Couldn&apos;t save your slides just now — please try again in a moment.
             </p>
           ) : null}
         </div>

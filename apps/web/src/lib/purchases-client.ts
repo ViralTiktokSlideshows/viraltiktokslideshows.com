@@ -119,13 +119,43 @@ function isLikelyMobile(): boolean {
   return (navigator.maxTouchPoints ?? 0) > 1 && /Mac/i.test(navigator.userAgent);
 }
 
+// Prepares one slide's downloadable File. Two independent things can go
+// wrong and neither should lose the slide silently:
+//   1. The server image proxy fetch fails (dead/expired source, network) --
+//      that slide genuinely has no image, so it's dropped (and logged).
+//   2. The fetch succeeds but the canvas text-compositing step throws
+//      (rare, but e.g. an oversized canvas hitting a memory limit, or a
+//      quirky mobile webview) -- in that case we still hand back the raw
+//      background image so the person gets *something* usable, just without
+//      the text baked on, rather than the whole download failing.
+async function prepareSlideFile(purchaseId: string, slide: SlideData): Promise<File> {
+  const backgroundBlob = await fetchSlideImageBlob(purchaseId, slide.index);
+  const name = `slide-${String(slide.index).padStart(2, "0")}`;
+  try {
+    // Bake the text where this specific slide wants it (top/center/bottom),
+    // matching the preview -- not a fixed spot for the whole deck.
+    const composedBlob = await composeSlideImage(
+      backgroundBlob,
+      slide.text,
+      slide.textPosition ?? "top",
+    );
+    return new File([composedBlob], `${name}.png`, { type: "image/png" });
+  } catch (composeError) {
+    console.error(`Compositing slide ${slide.index} failed; saving the raw image instead`, composeError);
+    const type = backgroundBlob.type || "image/png";
+    const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : "png";
+    return new File([backgroundBlob], `${name}.${ext}`, { type });
+  }
+}
+
 // Runs every slide concurrently (Promise.allSettled), not one at a time --
 // the sequential version blocked the entire download on whichever single
 // slide was slowest, and with no timeout anywhere in that chain a stuck
 // fetch or a stuck image decode meant the "downloading" spinner never
-// resolved and nothing after that slide ever ran (server logs would just
-// stop after N-1 image requests, exactly as seen: two slides logged, then
-// silence). Losing one slide to a timeout no longer sinks the rest.
+// resolved and nothing after that slide ever ran. Every step has a timeout
+// (fetch, image decode, font-load), one slide failing never sinks the rest,
+// and the whole thing always settles -- no path can leave the spinner
+// spinning forever.
 export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]): Promise<void> {
   const withImages = slides.filter((slide) => slide.imageUrl);
   if (withImages.length === 0) {
@@ -133,19 +163,7 @@ export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]
   }
 
   const results = await Promise.allSettled(
-    withImages.map(async (slide) => {
-      const backgroundBlob = await fetchSlideImageBlob(purchaseId, slide.index);
-      // Bake the text where this specific slide wants it (top/center/bottom),
-      // matching the preview -- not a fixed spot for the whole deck.
-      const composedBlob = await composeSlideImage(
-        backgroundBlob,
-        slide.text,
-        slide.textPosition ?? "top",
-      );
-      return new File([composedBlob], `slide-${String(slide.index).padStart(2, "0")}.png`, {
-        type: "image/png",
-      });
-    }),
+    withImages.map((slide) => prepareSlideFile(purchaseId, slide)),
   );
 
   const files: File[] = [];
@@ -158,14 +176,15 @@ export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]
   }
 
   if (files.length === 0) {
-    throw new Error("Could not download this slideshow.");
+    throw new Error("Could not download this slideshow. Please try again.");
   }
 
-  if (
-    isLikelyMobile() &&
-    typeof navigator !== "undefined" &&
-    navigator.canShare?.({ files })
-  ) {
+  // Share sheet ("Save to Photos") only on real mobile devices -- on desktop
+  // navigator.share({files}) can report as supported and then hang forever
+  // (the OS sheet never opens for plain image files), which is the exact
+  // "images all fetched then the spinner never stops" behavior. Desktop and
+  // anything without file-sharing go straight to per-file downloads below.
+  if (isLikelyMobile() && typeof navigator !== "undefined" && navigator.canShare?.({ files })) {
     try {
       await navigator.share({ files, title: "Your slideshow" });
       return;
