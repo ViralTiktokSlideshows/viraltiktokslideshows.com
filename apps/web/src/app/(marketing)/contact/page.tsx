@@ -4,6 +4,8 @@ import Link from "next/link";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
+import { FinalCta } from "@/components/landing/final-cta";
+
 export const metadata: Metadata = {
   title: "Contact",
   description: "Get in touch with viraltiktokslideshows — support, billing questions, or feedback.",
@@ -12,6 +14,7 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
+    <>
     <main className="mx-auto max-w-3xl px-4 py-16 sm:px-6 sm:py-20">
       <h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">Get in touch</h1>
       <p className="mt-3 max-w-lg text-sm text-muted-foreground sm:text-base">
@@ -53,5 +56,7 @@ export default function ContactPage() {
         </div>
       </div>
     </main>
+    <FinalCta />
+    </>
   );
 }

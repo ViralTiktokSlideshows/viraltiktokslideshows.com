@@ -82,7 +82,7 @@ export function IdeaStep({
             </Button>
           </div>
           <p className="mt-3 text-xs text-muted-foreground">
-            Press Enter to generate · free · takes about 4 seconds
+            Press Enter to generate · takes about 4 seconds
           </p>
         </form>
       </div>

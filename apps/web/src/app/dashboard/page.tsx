@@ -66,7 +66,7 @@ export default function DashboardPage() {
           <EmptyIllustration />
           <h2 className="mt-6 font-display text-xl font-bold text-foreground">No slideshows yet</h2>
           <p className="mt-2 max-w-xs text-sm text-muted-foreground">
-            Generate your first one — it&apos;s free to try, $2 to unlock the full deck.
+            Generate your first one — preview it, then unlock the full deck for just $2.
           </p>
           <Button size="lg" className="mt-6 gap-2" nativeButton={false} render={<Link href="/generate" />}>
             <Plus className="size-4" data-icon="inline-start" />

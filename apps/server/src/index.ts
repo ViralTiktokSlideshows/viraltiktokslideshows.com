@@ -873,7 +873,21 @@ app.get("/api/purchases/:id/slides/:index/image", async (c) => {
   const contentType = res.headers.get("content-type") || "image/png";
   const buffer = new Uint8Array(await res.arrayBuffer());
 
-  return c.body(buffer, 200, { "Content-Type": contentType });
+  // With ?download=1 the browser is told to SAVE this rather than display
+  // it (Content-Disposition: attachment). That's what makes the download
+  // approach bulletproof: the client just points a plain <a> at this URL
+  // and the browser downloads the file itself -- no fetch, no canvas, no
+  // blob, no Web Share, none of the client-side steps that were stalling
+  // or failing. filename extension follows the real content-type so a
+  // JPEG from Pexels saves as .jpg and a PNG from Ideogram as .png.
+  const headers: Record<string, string> = { "Content-Type": contentType };
+  if (c.req.query("download") === "1") {
+    const ext = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : "png";
+    const filename = `slide-${String(index).padStart(2, "0")}.${ext}`;
+    headers["Content-Disposition"] = `attachment; filename="${filename}"`;
+  }
+
+  return c.body(buffer, 200, headers);
 });
 
 // Dodo Payments webhook — confirms or fails a Purchase once the customer

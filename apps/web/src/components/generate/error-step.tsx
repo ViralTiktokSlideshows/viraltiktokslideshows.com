@@ -33,7 +33,7 @@ export function ErrorStep({
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Button type="button" size="lg" className="gap-2" onClick={onRetry}>
           <RotateCw className="size-4" data-icon="inline-start" />
-          Regenerate — free
+          Regenerate
         </Button>
         <Button type="button" size="lg" variant="outline" onClick={onEditIdea}>
           Edit idea

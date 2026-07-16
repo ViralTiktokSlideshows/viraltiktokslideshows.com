@@ -5,7 +5,6 @@ import { env } from "@viraltiktokslideshows/env/web";
 import type { SlideTextPosition } from "@/components/generate/slide-text-style";
 
 import { authedFetch } from "./api-fetch";
-import { composeSlideImage } from "./compose-slide-image";
 
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 
@@ -13,9 +12,8 @@ export type PurchaseStatus = "PENDING" | "PAID" | "FAILED" | "CANCELED";
 export type SlideFormat = "STORYTIME" | "LISTICLE" | "HOT_TAKE";
 
 // `textPosition` rides along on each slide from generation (openrouter.ts)
-// through the Purchase row to here, so the download bakes the text in the
-// same spot the preview shows it. Optional -- older purchases created
-// before per-slide placement existed just default to "top".
+// through the Purchase row; the app preview draws the text there. Optional
+// -- older purchases created before per-slide placement default to "top".
 export type SlideData = {
   index: number;
   text: string;
@@ -67,153 +65,45 @@ export async function fetchPurchase(id: string): Promise<PurchaseSummary | null>
   return { id, idea: data.idea ?? "", slides: data.slides ?? [], status: data.status, createdAt: "" };
 }
 
-// A stalled fetch has no default timeout in the browser -- without this,
-// a slow/hung R2 or Pexels response behind our own image proxy leaves the
-// whole download spinning forever with nothing to show for it (see the
-// comment on IMAGE_LOAD_TIMEOUT_MS in compose-slide-image.ts for the other
-// half of this -- image decode/font-load can hang too).
-const SLIDE_FETCH_TIMEOUT_MS = 20_000;
-
-async function fetchSlideImageBlob(purchaseId: string, index: number): Promise<Blob> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SLIDE_FETCH_TIMEOUT_MS);
-  try {
-    const res = await authedFetch(
-      `${SERVER_URL}/api/purchases/${purchaseId}/slides/${index}/image`,
-      { signal: controller.signal },
-    );
-    if (!res.ok) throw new Error(`Slide ${index} image request failed (${res.status})`);
-    return await res.blob();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-// Replaces the old zip download entirely, not just its implementation --
-// a .zip is a real barrier for the non-technical creators this app is
-// for (unzipping isn't an obvious phone gesture, especially on iOS, and
-// even setting that aside, blob-URL <a download> links are notoriously
-// unreliable specifically on iOS Safari). Fetches each slide's bare
-// background image through our own API (same-origin, so no cross-origin
-// R2 fetch/CORS surprises), bakes the actual slide text onto it
-// client-side at full resolution (see compose-slide-image.ts) so the
-// saved file matches what's shown in the app instead of a textless
-// background photo, then hands the finished images to the native share
-// sheet -- "Save Images"/"Save to Photos" in one tap, the same gesture
-// people already use to save photos out of Messages or Instagram.
+// Downloads every slide image, using the single most reliable file-download
+// mechanism a browser has: a plain <a> pointing at a server URL that sends
+// `Content-Disposition: attachment` (see the ?download=1 branch of
+// /api/purchases/:id/slides/:index/image in apps/server/src/index.ts). The
+// browser does the download itself.
 //
-// The Web Share sheet ("Save to Photos") is the right UX on a phone, but on
-// desktop it's a trap: several desktop browsers report navigator.canShare
-// ({files}) === true, yet navigator.share() then hangs forever (the OS
-// share sheet never actually opens for a plain image file) -- an await that
-// never settles, which is exactly the "all slides fetched 200 then the
-// spinner just spins" behavior seen in prod. So we only attempt the share
-// sheet when this is actually a touch/mobile device, and fall through to
-// direct per-file downloads everywhere else.
-function isLikelyMobile(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const uaData = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData;
-  if (typeof uaData?.mobile === "boolean") return uaData.mobile;
-  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
-  // iPadOS 13+ reports a desktop UA but has touch; treat multi-touch as mobile.
-  return (navigator.maxTouchPoints ?? 0) > 1 && /Mac/i.test(navigator.userAgent);
-}
-
-// Prepares one slide's downloadable File. Two independent things can go
-// wrong and neither should lose the slide silently:
-//   1. The server image proxy fetch fails (dead/expired source, network) --
-//      that slide genuinely has no image, so it's dropped (and logged).
-//   2. The fetch succeeds but the canvas text-compositing step throws
-//      (rare, but e.g. an oversized canvas hitting a memory limit, or a
-//      quirky mobile webview) -- in that case we still hand back the raw
-//      background image so the person gets *something* usable, just without
-//      the text baked on, rather than the whole download failing.
-async function prepareSlideFile(purchaseId: string, slide: SlideData): Promise<File> {
-  const backgroundBlob = await fetchSlideImageBlob(purchaseId, slide.index);
-  const name = `slide-${String(slide.index).padStart(2, "0")}`;
-  try {
-    // Bake the text where this specific slide wants it (top/center/bottom),
-    // matching the preview -- not a fixed spot for the whole deck.
-    const composedBlob = await composeSlideImage(
-      backgroundBlob,
-      slide.text,
-      slide.textPosition ?? "top",
-    );
-    return new File([composedBlob], `${name}.png`, { type: "image/png" });
-  } catch (composeError) {
-    console.error(`Compositing slide ${slide.index} failed; saving the raw image instead`, composeError);
-    const type = backgroundBlob.type || "image/png";
-    const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : "png";
-    return new File([backgroundBlob], `${name}.${ext}`, { type });
-  }
-}
-
-// Runs every slide concurrently (Promise.allSettled), not one at a time --
-// the sequential version blocked the entire download on whichever single
-// slide was slowest, and with no timeout anywhere in that chain a stuck
-// fetch or a stuck image decode meant the "downloading" spinner never
-// resolved and nothing after that slide ever ran. Every step has a timeout
-// (fetch, image decode, font-load), one slide failing never sinks the rest,
-// and the whole thing always settles -- no path can leave the spinner
-// spinning forever.
+// This deliberately REPLACES the previous fetch -> canvas-composite -> blob
+// -> Web Share pipeline entirely. That pipeline had too many independent
+// points of failure in the field: Web Share hangs indefinitely on desktop,
+// canvas compositing / blob handling can throw in some webviews, and any of
+// them dying left the user with either an endless spinner or a bare
+// "couldn't download" error. An anchor pointed at an attachment URL cannot
+// stall -- there's no promise to hang, no canvas, no blob, no share sheet.
+// The trade-off: the downloaded files are the background images without the
+// overlay text baked in (the text still shows in the in-app preview);
+// re-baking text into the downloaded file needs the image bytes in JS,
+// which is what was proving unreliable.
+//
+// A small gap between clicks keeps the browser from treating the batch as a
+// popup/download flood; browsers may show a one-time "allow multiple
+// downloads" prompt, which is expected and fine.
 export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]): Promise<void> {
   const withImages = slides.filter((slide) => slide.imageUrl);
   if (withImages.length === 0) {
     throw new Error("No images are available for this slideshow yet.");
   }
 
-  const results = await Promise.allSettled(
-    withImages.map((slide) => prepareSlideFile(purchaseId, slide)),
-  );
-
-  const files: File[] = [];
-  for (const result of results) {
-    if (result.status === "fulfilled") {
-      files.push(result.value);
-    } else {
-      console.error("Failed to prepare a slide for download", result.reason);
-    }
-  }
-
-  if (files.length === 0) {
-    throw new Error("Could not download this slideshow. Please try again.");
-  }
-
-  // Share sheet ("Save to Photos") only on real mobile devices -- on desktop
-  // navigator.share({files}) can report as supported and then hang forever
-  // (the OS sheet never opens for plain image files), which is the exact
-  // "images all fetched then the spinner never stops" behavior. Desktop and
-  // anything without file-sharing go straight to per-file downloads below.
-  if (isLikelyMobile() && typeof navigator !== "undefined" && navigator.canShare?.({ files })) {
-    try {
-      await navigator.share({ files, title: "Your slideshow" });
-      return;
-    } catch (error) {
-      // Backing out of the share sheet throws AbortError -- that's a
-      // completed, intentional "no thanks," not a failure to recover
-      // from by also firing off N separate downloads behind their back.
-      if (error instanceof Error && error.name === "AbortError") return;
-      // Any other share failure falls through to the plain-download path
-      // below instead of leaving the user with nothing.
-    }
-  }
-
-  // Direct per-file downloads: the reliable path on desktop (and the
-  // fallback for any browser without file-sharing). One plain download per
-  // image, no archive step. A short pause between each keeps the browser
-  // from treating a burst of downloads as spam and blocking them; the
-  // delayed revoke avoids the same premature-cleanup race the old zip
-  // download had.
-  for (const file of files) {
-    const url = URL.createObjectURL(file);
+  for (const slide of withImages) {
     const link = document.createElement("a");
-    link.href = url;
-    link.download = file.name;
+    link.href = `${SERVER_URL}/api/purchases/${purchaseId}/slides/${slide.index}/image?download=1`;
+    // Cross-origin downloads ignore this attribute and use the server's
+    // Content-Disposition filename instead, but it's a correct same-origin
+    // hint and harmless otherwise.
+    link.download = `slide-${String(slide.index).padStart(2, "0")}.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    // Space the downloads out so the browser doesn't drop or block a burst.
+    await new Promise((resolve) => setTimeout(resolve, 400));
   }
 }
 

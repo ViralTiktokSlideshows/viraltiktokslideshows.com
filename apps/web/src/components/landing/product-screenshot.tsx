@@ -1,7 +1,5 @@
 import { Reveal } from "@/components/reveal";
 
-import { ScreenshotPlaceholder } from "./screenshot-placeholder";
-
 export function ProductScreenshot() {
   return (
     <section className="px-4 py-16 sm:px-6 sm:py-20">
@@ -14,11 +12,12 @@ export function ProductScreenshot() {
             viraltiktokslideshows.com
           </span>
         </div>
-        <div className="p-6 sm:p-10">
-          <ScreenshotPlaceholder
-            label="Product screenshot — the generator in action"
-            hint="1440 × 900 recommended"
-            className="min-h-[260px] sm:min-h-[340px]"
+        <div className="bg-muted/30 p-2 sm:p-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/preview/Product-preview.png"
+            alt="The Viral TikTok Slideshows generator in action"
+            className="w-full rounded-xl"
           />
         </div>
       </Reveal>

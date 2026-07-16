@@ -7,8 +7,6 @@ import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
 import { Reveal } from "@/components/reveal";
 
-import { ScreenshotPlaceholder } from "./screenshot-placeholder";
-
 const STEPS = [
   {
     id: "drop",
@@ -17,7 +15,8 @@ const STEPS = [
     iconBg: "bg-spark/10 text-spark",
     title: "Drop your idea",
     description: "One sentence, plus a format and a vibe.",
-    imageLabel: "App screenshot — typing your idea",
+    image: "/preview/typing-your-idea.png",
+    imageAlt: "Typing your idea into the generator",
   },
   {
     id: "write",
@@ -32,7 +31,8 @@ const STEPS = [
         <span className="text-riot">payoff structure</span>, the save-worthy ending.
       </>
     ),
-    imageLabel: "App screenshot — AI writing your slides",
+    image: "/preview/AI-building-slideshow.png",
+    imageAlt: "AI building your slideshow",
   },
   {
     id: "post",
@@ -41,7 +41,8 @@ const STEPS = [
     iconBg: "bg-void text-bone",
     title: "Post it",
     description: "Download TikTok-ready 1080×1920 images and go.",
-    imageLabel: "App screenshot — downloading your slides",
+    image: "/preview/downloading-slides.png",
+    imageAlt: "Downloading your finished slides",
   },
 ] as const;
 
@@ -89,7 +90,12 @@ export function HowItWorks() {
                     )}
                   >
                     <div className="overflow-hidden">
-                      <ScreenshotPlaceholder label={step.imageLabel} className="mb-5" />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={step.image}
+                        alt={step.imageAlt}
+                        className="mb-5 w-full rounded-2xl border border-border"
+                      />
                     </div>
                   </div>
 

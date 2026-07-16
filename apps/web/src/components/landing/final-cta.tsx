@@ -47,7 +47,7 @@ export function FinalCta() {
             Your next viral post is one sentence away
           </h2>
           <p className="mx-auto mt-4 max-w-md text-sm text-bone/60 sm:text-base">
-            Type an idea, see your hook slide free, and unlock the full deck for $2.
+            Type an idea, see your hook slide, and unlock the full deck for just $2.
           </p>
           <Button
             size="lg"
@@ -55,7 +55,7 @@ export function FinalCta() {
             nativeButton={false}
             render={<Link href="/generate" />}
           >
-            Generate my slideshow &mdash; free
+            Generate my slideshow
             <ArrowRight className="size-4" data-icon="inline-end" />
           </Button>
           <p className="mt-4 text-xs text-bone/40">

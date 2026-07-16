@@ -29,7 +29,7 @@ export default function BlogPage() {
           yourself.
         </p>
         <Button size="lg" className="mt-6" nativeButton={false} render={<Link href="/generate" />}>
-          Generate a slideshow — free
+          Generate a slideshow
         </Button>
       </div>
     </main>

@@ -132,7 +132,7 @@ export default function Header() {
             <>
               <ProfileMenu name={user.name ?? user.email} email={user.email} image={user.image} />
               <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/generate" />}>
-                Generate free
+                Generate
               </Button>
             </>
           ) : (
@@ -141,7 +141,7 @@ export default function Header() {
                 Sign in
               </Button>
               <Button variant="secondary" size="sm" nativeButton={false} render={<Link href="/generate" />}>
-                Generate free
+                Generate
               </Button>
             </>
           )}

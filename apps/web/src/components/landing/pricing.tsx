@@ -42,7 +42,7 @@ export function Pricing() {
             Pricing
           </span>
           <h2 className="mt-3 font-display text-3xl font-bold text-foreground sm:text-4xl">
-            Try it free. Unlock when you love it.
+            Preview it. Unlock for just $2.
           </h2>
         </Reveal>
 
@@ -50,7 +50,7 @@ export function Pricing() {
           <Reveal className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6">
             <div className="flex items-start justify-between gap-4">
               <h3 className="font-semibold text-foreground">Preview</h3>
-              <span className="font-mono text-sm font-semibold text-muted-foreground">Free</span>
+              <span className="font-mono text-sm font-semibold text-muted-foreground">$0</span>
             </div>
             <p className="mt-3 text-sm text-muted-foreground">
               See your hook slide before paying a cent. If the hook doesn&apos;t stop{" "}
@@ -77,7 +77,7 @@ export function Pricing() {
               nativeButton={false}
               render={<Link href="/generate" />}
             >
-              Generate my slideshow &mdash; free
+              Generate my slideshow
             </Button>
           </Reveal>
         </div>

@@ -10,8 +10,18 @@ const THUMBS = [
 ] as const;
 
 const TESTIMONIALS = [
-  "Testimonial goes here once creators start sharing results.",
-  "Second social-proof quote — swap in a real one when available.",
+  {
+    quote:
+      "I stopped overthinking captions. I drop the idea, it writes the hook and every slide, I post. Two of my last five slideshows crossed 100k — the hooks are just built different.",
+    name: "Cole Ironmind",
+    handle: "@coleironmind",
+  },
+  {
+    quote:
+      "I'm a developer, not a designer. This gets me a clean, post-ready slideshow in under a minute — no Canva, no wrestling with fonts. It's the fastest part of my whole content workflow now.",
+    name: "Kin Leo Zinzombe",
+    handle: "@codewithkin",
+  },
 ];
 
 export function Playbook() {
@@ -100,9 +110,9 @@ export function Playbook() {
             <span className="font-mono text-3xl font-bold text-spark">4,217</span>
             <span className="mt-1 text-sm text-bone/60">slideshows generated and counting</span>
           </Reveal>
-          {TESTIMONIALS.map((quote, index) => (
+          {TESTIMONIALS.map((testimonial, index) => (
             <Reveal
-              key={quote}
+              key={testimonial.handle}
               delay={(index + 1) * 100}
               className="flex flex-col justify-between rounded-2xl border border-border bg-card p-6"
             >
@@ -111,8 +121,13 @@ export function Playbook() {
                   <Star key={i} className="size-3.5 fill-current" />
                 ))}
               </div>
-              <p className="mt-3 text-sm text-foreground/80 italic">&ldquo;{quote}&rdquo;</p>
-              <p className="mt-4 text-xs text-muted-foreground">@creator &middot; placeholder</p>
+              <p className="mt-3 text-sm text-foreground/80 italic">
+                &ldquo;{testimonial.quote}&rdquo;
+              </p>
+              <p className="mt-4 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">{testimonial.name}</span>{" "}
+                &middot; {testimonial.handle}
+              </p>
             </Reveal>
           ))}
         </div>
