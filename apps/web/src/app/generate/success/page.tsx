@@ -15,6 +15,7 @@ import {
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { env } from "@viraltiktokslideshows/env/web";
 
+import type { SlideTextPosition } from "@/components/generate/slide-text-style";
 import { GenerateShell } from "@/components/dashboard/generate-shell";
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
 import { useSession } from "@/lib/auth-client";
@@ -30,7 +31,7 @@ import { fetchSettings } from "@/lib/settings-client";
 // to post" screen — the real unlocked slides, not a placeholder.
 
 type Status = "checking" | "paid" | "pending" | "failed" | "not_found";
-type Slide = { index: number; text: string; imageUrl?: string };
+type Slide = { index: number; text: string; imageUrl?: string; textPosition?: SlideTextPosition };
 
 const STOP_WORDS = new Set([
   "the",

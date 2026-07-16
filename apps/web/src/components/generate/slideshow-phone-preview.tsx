@@ -5,7 +5,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
-export type PreviewSlide = { index: number; text: string; imageUrl?: string };
+import { justifyForPosition, type SlideTextPosition } from "./slide-text-style";
+
+export type PreviewSlide = {
+  index: number;
+  text: string;
+  imageUrl?: string;
+  textPosition?: SlideTextPosition;
+};
 
 const STRIPES =
   "bg-[repeating-linear-gradient(135deg,var(--color-muted)_0px,var(--color-muted)_10px,transparent_10px,transparent_20px)]";
@@ -115,13 +122,19 @@ export function SlideshowPhonePreview({ slides }: { slides: PreviewSlide[] }) {
           {active + 1} / {slides.length}
         </span>
 
-        {/* Text lives in the upper "quiet zone" the image prompt was
-            written to leave clear (see slide-text-style.ts) instead of a
-            bottom gradient band over the subject — matches the reference
-            slideshow accounts this style was pulled from. The stroke is a
-            stacked text-shadow (not -webkit-text-stroke) so it renders
-            consistently across browsers regardless of what's behind it. */}
-        <div className="absolute inset-x-[8%] top-[9%]">
+        {/* Each slide places its own text where its background photo left
+            room (top/center/bottom -- see slide-text-style.ts and the
+            matching composition in the server's image prompt), instead of a
+            fixed spot for the whole deck. A full-height flex column anchors
+            the block to the chosen edge; the canvas export
+            (compose-slide-image.ts) targets the same three anchors so the
+            saved image matches this preview. The stroke is a stacked
+            text-shadow (not -webkit-text-stroke) so it renders consistently
+            across browsers regardless of what's behind it. */}
+        <div
+          className="absolute inset-x-[8%] inset-y-[7%] flex flex-col"
+          style={{ justifyContent: justifyForPosition(slide?.textPosition ?? "top") }}
+        >
           <p
             className="font-display text-[17px] leading-[1.15] font-bold text-white"
             style={{
