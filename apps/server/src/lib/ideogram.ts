@@ -27,14 +27,14 @@ const RESOLUTION = "1440x2560";
 // off rather than leaving "Building your slideshow…" spinning forever.
 const REQUEST_TIMEOUT_MS = 45_000;
 
-// Ideogram's pricing page quotes per-image cost by model + rendering
-// speed, and this is the v4 TURBO rate specifically — NOT the v3 Turbo
-// rate ($0.03) that's the one most people land on first, since v3 and v4
-// are priced separately and v4 is the newer/pricier model. Re-check this
-// against the current v4 pricing table before trusting the totals these
-// logs report; it's a display estimate, not a value Ideogram's API
-// actually returns anywhere in the response.
-const ESTIMATED_COST_PER_IMAGE_USD = 0.08;
+// Confirmed against Ideogram's own API pricing page (ideogram.ai/pricing,
+// "API pricing" section, rev. Aug 6 2025): "4.0 Turbo" — the exact model +
+// rendering_speed this file requests — is $0.03/image. v4 Turbo and v3
+// Turbo are the same rate; the earlier guess here (v4 being pricier than
+// v3) was wrong. Still a display estimate, not a value Ideogram's API
+// actually returns anywhere in the response — re-check this constant if
+// Ideogram revises pricing.
+const ESTIMATED_COST_PER_IMAGE_USD = 0.03;
 
 // Process-lifetime only — resets on every deploy/restart, so treat this as
 // "spend since the server last started," not a running account balance.
