@@ -33,15 +33,20 @@ export function RevealStep({ data }: { data: GeneratedSlideshow }) {
   const hookImageUrl = data.slides[0]?.imageUrl;
 
   async function handleUnlock() {
+    // Bulletproof guard: the button below is already disabled while
+    // isRedirecting is true, but that's a paint away from this click --
+    // this makes a fast double-click/double-tap a no-op regardless of
+    // whether the disabled state has actually committed to the DOM yet.
+    if (isRedirecting) return;
+
     setError("");
+    setIsRedirecting(true);
 
     if (!user) {
       savePendingSlideshow(data);
       router.push("/generate/checkout");
       return;
     }
-
-    setIsRedirecting(true);
 
     // The sidebar/header's "signed in" state comes from whatever
     // useSession() last fetched -- which can be stale by the time someone

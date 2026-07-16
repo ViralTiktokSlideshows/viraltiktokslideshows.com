@@ -526,62 +526,24 @@ app.post("/api/checkout/create", async (c) => {
     }
   }
 
-  // This is the moment someone actually commits to paying — worth
-  // spending Ideogram credits on the slides that were text-only during
-  // the free preview. Runs before the Purchase row is created so the
-  // stored slides snapshot already has every image, not just the hook.
-  let enrichedSlides = slides;
-  try {
-    enrichedSlides = await fillRemainingSlideImages(slides);
-  } catch (error) {
-    console.error("Failed to fill remaining slide images, continuing with what we have", error);
-  }
-
   // Quota-first: an active plan with room left in the current billing
-  // period covers this generation for free, no Dodo checkout at all. The
-  // Purchase is created already PAID + includedInPlan, and the client is
-  // sent straight to the success page it already knows how to handle --
-  // both callers (reveal-step.tsx, generate/checkout/page.tsx) just do
-  // `window.location.href = checkoutUrl`, so a same-origin success URL
-  // here works exactly like a Dodo one would.
+  // period covers this generation for free, no Dodo checkout at all.
+  // Computed *before* claiming the Purchase row below since it decides what
+  // shape that row gets created in (PAID + includedInPlan, vs a normal
+  // pending-for-Dodo-checkout row).
   const planUsage = await getPlanUsage(user);
-  if (planUsage && planUsage.used < planUsage.cap) {
-    let planPurchase: Awaited<ReturnType<typeof prisma.purchase.create>>;
-    try {
-      planPurchase = await prisma.purchase.create({
-        data: {
-          userId: user.id,
-          idea,
-          formats,
-          vibes,
-          slides: enrichedSlides,
-          idempotencyKey: idempotencyKey ?? undefined,
-          format: user.defaultFormat,
-          status: "PAID",
-          includedInPlan: true,
-          amount: 0,
-        },
-      });
-    } catch (error) {
-      if (idempotencyKey) {
-        const existing = await prisma.purchase.findUnique({ where: { idempotencyKey } });
-        if (existing) {
-          return c.json({
-            checkoutUrl: `${env.CORS_ORIGIN}/generate/success?purchase=${existing.id}`,
-            purchaseId: existing.id,
-          });
-        }
-      }
-      console.error("Failed to create plan-covered purchase", error);
-      return c.json({ error: "Could not start checkout" }, 502);
-    }
+  const isPlanCovered = Boolean(planUsage && planUsage.used < planUsage.cap);
 
-    return c.json({
-      checkoutUrl: `${env.CORS_ORIGIN}/generate/success?purchase=${planPurchase.id}`,
-      purchaseId: planPurchase.id,
-    });
-  }
-
+  // Claim the idempotencyKey via the Purchase row's unique constraint
+  // *before* spending anything on Ideogram, not after. This used to run the
+  // other way around -- fillRemainingSlideImages() first, Purchase.create()
+  // second -- which meant a burst of duplicate submits (double-click, a
+  // retried request) all raced on the *expensive* step: every one of them
+  // called Ideogram concurrently for the same ~7 slides before any of them
+  // had a row to dedupe against, which is exactly what was tripping
+  // Ideogram's "maximum number of requests that can be processed at once"
+  // 429s. A plain insert's unique-constraint race is nearly instant, so the
+  // losers now bail before ever touching Ideogram.
   let purchase: Awaited<ReturnType<typeof prisma.purchase.create>>;
   try {
     purchase = await prisma.purchase.create({
@@ -590,26 +552,64 @@ app.post("/api/checkout/create", async (c) => {
         idea,
         formats,
         vibes,
-        slides: enrichedSlides,
+        slides,
         idempotencyKey: idempotencyKey ?? undefined,
         // Snapshot of the same preference /api/generate used for this
         // idea's text — kept alongside the purchase so /dashboard/saved
         // can show what style it was written in.
         format: user.defaultFormat,
+        ...(isPlanCovered ? { status: "PAID" as const, includedInPlan: true, amount: 0 } : {}),
       },
     });
   } catch (error) {
-    // Unique constraint race: two requests with the same idempotencyKey
-    // both passed the check above before either finished creating. Whoever
-    // lost just reads back what the winner created.
+    // Unique constraint race: another request with the same idempotencyKey
+    // won the claim a moment earlier. Read back whatever it created instead
+    // of doing anything expensive here.
     if (idempotencyKey) {
       const existing = await prisma.purchase.findUnique({ where: { idempotencyKey } });
-      if (existing && existing.checkoutUrl) {
-        return c.json({ checkoutUrl: existing.checkoutUrl, purchaseId: existing.id });
+      if (existing) {
+        if (existing.status === "PAID") {
+          return c.json({
+            checkoutUrl: `${env.CORS_ORIGIN}/generate/success?purchase=${existing.id}`,
+            purchaseId: existing.id,
+          });
+        }
+        if (existing.checkoutUrl) {
+          return c.json({ checkoutUrl: existing.checkoutUrl, purchaseId: existing.id });
+        }
+        // Row exists but the winning request hasn't finished filling images
+        // / creating the Dodo session yet -- nothing useful to hand back.
+        return c.json({ error: "Checkout already in progress — try again in a moment" }, 409);
       }
     }
     console.error("Failed to create purchase", error);
     return c.json({ error: "Could not start checkout" }, 502);
+  }
+
+  // Now that this request exclusively owns the row, it's safe (and the
+  // only request that will) to spend Ideogram credits on whichever slides
+  // were text-only during the free preview.
+  let enrichedSlides = slides;
+  try {
+    enrichedSlides = await fillRemainingSlideImages(slides);
+  } catch (error) {
+    console.error("Failed to fill remaining slide images, continuing with what we have", error);
+  }
+
+  if (isPlanCovered) {
+    purchase = await prisma.purchase.update({
+      where: { id: purchase.id },
+      data: { slides: enrichedSlides },
+    });
+
+    // Plan-covered generations skip Dodo entirely -- the client is sent
+    // straight to the success page it already knows how to handle, same as
+    // a real Dodo return_url would (both callers just do
+    // `window.location.href = checkoutUrl`).
+    return c.json({
+      checkoutUrl: `${env.CORS_ORIGIN}/generate/success?purchase=${purchase.id}`,
+      purchaseId: purchase.id,
+    });
   }
 
   try {
@@ -623,7 +623,11 @@ app.post("/api/checkout/create", async (c) => {
     const checkoutId = session.session_id ?? session.id ?? null;
     await prisma.purchase.update({
       where: { id: purchase.id },
-      data: { dodoCheckoutId: checkoutId ?? undefined, checkoutUrl: session.checkout_url },
+      data: {
+        slides: enrichedSlides,
+        dodoCheckoutId: checkoutId ?? undefined,
+        checkoutUrl: session.checkout_url,
+      },
     });
 
     return c.json({ checkoutUrl: session.checkout_url, purchaseId: purchase.id });
@@ -631,7 +635,7 @@ app.post("/api/checkout/create", async (c) => {
     console.error("Failed to create Dodo checkout session", error);
     await prisma.purchase.update({
       where: { id: purchase.id },
-      data: { status: "FAILED" },
+      data: { status: "FAILED", slides: enrichedSlides },
     });
     return c.json({ error: "Could not start checkout" }, 502);
   }
