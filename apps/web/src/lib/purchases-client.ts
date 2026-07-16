@@ -2,6 +2,8 @@
 
 import { env } from "@viraltiktokslideshows/env/web";
 
+import type { SlideTextPosition } from "@/components/generate/slide-text-style";
+
 import { authedFetch } from "./api-fetch";
 import { composeSlideImage } from "./compose-slide-image";
 
@@ -10,10 +12,21 @@ const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 export type PurchaseStatus = "PENDING" | "PAID" | "FAILED" | "CANCELED";
 export type SlideFormat = "STORYTIME" | "LISTICLE" | "HOT_TAKE";
 
+// `textPosition` rides along on each slide from generation (openrouter.ts)
+// through the Purchase row to here, so the download bakes the text in the
+// same spot the preview shows it. Optional -- older purchases created
+// before per-slide placement existed just default to "top".
+export type SlideData = {
+  index: number;
+  text: string;
+  imageUrl?: string;
+  textPosition?: SlideTextPosition;
+};
+
 export type PurchaseSummary = {
   id: string;
   idea: string;
-  slides: { index: number; text: string; imageUrl?: string }[];
+  slides: SlideData[];
   status: PurchaseStatus;
   createdAt: string;
   saved?: boolean;
@@ -89,6 +102,23 @@ async function fetchSlideImageBlob(purchaseId: string, index: number): Promise<B
 // sheet -- "Save Images"/"Save to Photos" in one tap, the same gesture
 // people already use to save photos out of Messages or Instagram.
 //
+// The Web Share sheet ("Save to Photos") is the right UX on a phone, but on
+// desktop it's a trap: several desktop browsers report navigator.canShare
+// ({files}) === true, yet navigator.share() then hangs forever (the OS
+// share sheet never actually opens for a plain image file) -- an await that
+// never settles, which is exactly the "all slides fetched 200 then the
+// spinner just spins" behavior seen in prod. So we only attempt the share
+// sheet when this is actually a touch/mobile device, and fall through to
+// direct per-file downloads everywhere else.
+function isLikelyMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const uaData = (navigator as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData;
+  if (typeof uaData?.mobile === "boolean") return uaData.mobile;
+  if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return true;
+  // iPadOS 13+ reports a desktop UA but has touch; treat multi-touch as mobile.
+  return (navigator.maxTouchPoints ?? 0) > 1 && /Mac/i.test(navigator.userAgent);
+}
+
 // Runs every slide concurrently (Promise.allSettled), not one at a time --
 // the sequential version blocked the entire download on whichever single
 // slide was slowest, and with no timeout anywhere in that chain a stuck
@@ -96,10 +126,7 @@ async function fetchSlideImageBlob(purchaseId: string, index: number): Promise<B
 // resolved and nothing after that slide ever ran (server logs would just
 // stop after N-1 image requests, exactly as seen: two slides logged, then
 // silence). Losing one slide to a timeout no longer sinks the rest.
-export async function saveSlidesToDevice(
-  purchaseId: string,
-  slides: { index: number; text: string; imageUrl?: string }[],
-): Promise<void> {
+export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]): Promise<void> {
   const withImages = slides.filter((slide) => slide.imageUrl);
   if (withImages.length === 0) {
     throw new Error("No images are available for this slideshow yet.");
@@ -108,7 +135,13 @@ export async function saveSlidesToDevice(
   const results = await Promise.allSettled(
     withImages.map(async (slide) => {
       const backgroundBlob = await fetchSlideImageBlob(purchaseId, slide.index);
-      const composedBlob = await composeSlideImage(backgroundBlob, slide.text);
+      // Bake the text where this specific slide wants it (top/center/bottom),
+      // matching the preview -- not a fixed spot for the whole deck.
+      const composedBlob = await composeSlideImage(
+        backgroundBlob,
+        slide.text,
+        slide.textPosition ?? "top",
+      );
       return new File([composedBlob], `slide-${String(slide.index).padStart(2, "0")}.png`, {
         type: "image/png",
       });
@@ -128,7 +161,11 @@ export async function saveSlidesToDevice(
     throw new Error("Could not download this slideshow.");
   }
 
-  if (typeof navigator !== "undefined" && navigator.canShare?.({ files })) {
+  if (
+    isLikelyMobile() &&
+    typeof navigator !== "undefined" &&
+    navigator.canShare?.({ files })
+  ) {
     try {
       await navigator.share({ files, title: "Your slideshow" });
       return;
@@ -142,11 +179,12 @@ export async function saveSlidesToDevice(
     }
   }
 
-  // Fallback for browsers without file-sharing support (most desktop
-  // browsers): one plain download per image, still no archive step. A
-  // short pause between each keeps the browser from treating a burst of
-  // downloads as spam and blocking them; the delayed revoke avoids the
-  // same premature-cleanup race the old zip download had.
+  // Direct per-file downloads: the reliable path on desktop (and the
+  // fallback for any browser without file-sharing). One plain download per
+  // image, no archive step. A short pause between each keeps the browser
+  // from treating a burst of downloads as spam and blocking them; the
+  // delayed revoke avoids the same premature-cleanup race the old zip
+  // download had.
   for (const file of files) {
     const url = URL.createObjectURL(file);
     const link = document.createElement("a");

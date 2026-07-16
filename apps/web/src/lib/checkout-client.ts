@@ -2,6 +2,8 @@
 
 import { env } from "@viraltiktokslideshows/env/web";
 
+import type { SlideTextPosition } from "@/components/generate/slide-text-style";
+
 import { authedFetch } from "./api-fetch";
 
 // Thin client for the checkout endpoints on apps/server, plus a small
@@ -13,7 +15,18 @@ import { authedFetch } from "./api-fetch";
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 const STORAGE_KEY = "vts:pending-slideshow";
 
-export type PendingSlide = { index: number; text: string; imageUrl?: string };
+// textPosition + visual ride along untouched from /api/generate so they
+// survive the round-trip through sign-in and into the Purchase row the
+// server creates (see POST /api/checkout/create) -- textPosition so the
+// download/preview place text per slide, visual so the server can generate
+// each remaining slide's image from its own concept.
+export type PendingSlide = {
+  index: number;
+  text: string;
+  imageUrl?: string;
+  textPosition?: SlideTextPosition;
+  visual?: string;
+};
 
 export type PendingSlideshow = {
   id: string;
