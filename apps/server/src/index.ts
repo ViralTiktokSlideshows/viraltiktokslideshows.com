@@ -840,12 +840,32 @@ app.get("/api/purchases/:id/slides/:index/image", async (c) => {
     return c.json({ error: "No image for this slide" }, 404);
   }
 
-  const res = await fetch(slide.imageUrl);
+  // No timeout here previously -- a slow or hanging source host left this
+  // request open indefinitely with nothing in the logs past the initial
+  // hit, which combined with the old sequential client-side download loop
+  // (see saveSlidesToDevice) meant one bad slide silently stalled the
+  // entire download. slide.imageUrl is always either a permanent R2 URL
+  // (Ideogram-sourced slides -- see persistImageToR2 in lib/r2.ts, which
+  // runs immediately after every Ideogram generation, before the URL is
+  // ever stored) or a permanent Pexels CDN URL (free-preview hook slide --
+  // see lib/stock-photos.ts); this fetch should be fast against either.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  let res: Response;
+  try {
+    res = await fetch(slide.imageUrl, { signal: controller.signal });
+  } catch (error) {
+    console.error(`Failed to fetch slide ${index} image for purchase ${purchaseId}`, error);
+    return c.json({ error: "Could not load this image. Try again." }, 502);
+  } finally {
+    clearTimeout(timeout);
+  }
   if (!res.ok) {
-    // Almost certainly an ephemeral Ideogram fallback URL that expired --
-    // the normal Pexels/R2 path is permanent and shouldn't hit this.
+    // No known code path stores a raw, ephemeral Ideogram URL on a slide
+    // (see persistImageToR2 above) -- this should only fire for a
+    // genuinely dead/moved source file, not routine Ideogram expiry.
     return c.json(
-      { error: "This image has expired. Regenerate the slideshow to download it." },
+      { error: "This image is unavailable. Regenerate the slideshow to download it." },
       410,
     );
   }

@@ -55,9 +55,20 @@ const FORMAT_DIRECTIVES: Record<SlideFormat, string> = {
     "Style: a bold, opinionated, slightly contrarian voice — like someone dropping an unpopular but well-argued take. The hook slide is a provocative claim, not a question, and the closing slide doubles down rather than softening it.",
 };
 
-export async function generateSlideshowText(
+// Single attempt at the OpenRouter call -- pulled out of
+// generateSlideshowText so that function can retry it once on a parse
+// failure (see below) without duplicating the request/parsing logic.
+// Previously, "OpenRouter returned an unusable slide list" was thrown with
+// no record of what the model actually said, so a production failure like
+// this had no way to tell a genuine schema regression apart from an
+// ordinary one-off bad completion (LLMs occasionally return truncated or
+// off-shape JSON even with response_format: json_object, which only
+// guarantees valid JSON, not a specific shape) -- the raw content is now
+// logged (truncated) whenever parsing comes up short, so the next
+// occurrence is diagnosable instead of a bare error string.
+async function attemptGenerate(
   idea: string,
-  format: SlideFormat = "STORYTIME",
+  format: SlideFormat,
 ): Promise<GeneratedSlideshowText> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -101,10 +112,17 @@ export async function generateSlideshowText(
 
   const data = (await res.json()) as OpenRouterResponse;
   const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error("OpenRouter returned no content");
+  if (!content) {
+    console.error("[openrouter] response had no message content", JSON.stringify(data).slice(0, 500));
+    throw new Error("OpenRouter returned no content");
+  }
 
   const slideTexts = parseSlidesJson(content);
   if (!slideTexts || slideTexts.length < 3) {
+    console.error(
+      `[openrouter] unusable slide list (got ${slideTexts?.length ?? 0} slides) -- raw content:`,
+      content.slice(0, 500),
+    );
     throw new Error("OpenRouter returned an unusable slide list");
   }
 
@@ -117,6 +135,24 @@ export async function generateSlideshowText(
     hook: hookText,
     slides: slideTexts.map((text, i) => ({ index: i + 1, text })),
   };
+}
+
+export async function generateSlideshowText(
+  idea: string,
+  format: SlideFormat = "STORYTIME",
+): Promise<GeneratedSlideshowText> {
+  try {
+    return await attemptGenerate(idea, format);
+  } catch (err) {
+    // One retry, not a loop: this is on the free, unauthenticated
+    // /api/generate path, so a stuck upstream shouldn't turn into several
+    // extra OpenRouter calls per visitor. A bad completion (unusable slide
+    // list) is usually a one-off the same request succeeds at on a second
+    // try; a genuine outage or auth failure will just fail the same way
+    // again and surface to the caller as before.
+    console.error("[openrouter] first attempt failed, retrying once", err);
+    return await attemptGenerate(idea, format);
+  }
 }
 
 // Models occasionally wrap JSON in markdown fences or add stray text

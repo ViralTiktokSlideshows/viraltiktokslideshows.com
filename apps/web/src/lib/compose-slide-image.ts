@@ -46,15 +46,31 @@ function wrapLines(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
   return lines.length > 0 ? lines : [text];
 }
 
+// Neither img.onload/onerror nor document.fonts.ready are guaranteed to
+// fire in every browser/decode-failure edge case -- without a hard ceiling
+// on each, one stuck slide hangs the whole download with the spinner just
+// spinning forever and nothing in the server logs past that slide's fetch
+// (which is exactly what this looked like: two slides' image requests
+// logged, then silence -- the third slide's fetch never fired because the
+// second one never finished composing).
+const IMAGE_LOAD_TIMEOUT_MS = 15_000;
+const FONTS_READY_TIMEOUT_MS = 5_000;
+
 function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(blob);
     const img = new window.Image();
+    const timeout = setTimeout(() => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Timed out decoding this slide's image"));
+    }, IMAGE_LOAD_TIMEOUT_MS);
     img.onload = () => {
+      clearTimeout(timeout);
       URL.revokeObjectURL(objectUrl);
       resolve(img);
     };
     img.onerror = () => {
+      clearTimeout(timeout);
       URL.revokeObjectURL(objectUrl);
       reject(new Error("Could not decode this slide's image"));
     };
@@ -67,9 +83,15 @@ export async function composeSlideImage(backgroundBlob: Blob, text: string): Pro
 
   // Canvas text needs the font already loaded to measure/draw correctly --
   // unlike DOM text, there's no automatic reflow once a webfont finishes
-  // loading after the fact.
+  // loading after the fact. document.fonts.ready has been known to never
+  // resolve in some browser/webview edge cases, so this isn't allowed to
+  // block the export indefinitely -- worst case the text draws in a
+  // fallback font for this one image instead of hanging the download.
   if (typeof document !== "undefined" && document.fonts?.ready) {
-    await document.fonts.ready;
+    await Promise.race([
+      document.fonts.ready,
+      new Promise((resolve) => setTimeout(resolve, FONTS_READY_TIMEOUT_MS)),
+    ]);
   }
 
   const canvas = document.createElement("canvas");

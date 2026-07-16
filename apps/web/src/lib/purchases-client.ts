@@ -54,6 +54,28 @@ export async function fetchPurchase(id: string): Promise<PurchaseSummary | null>
   return { id, idea: data.idea ?? "", slides: data.slides ?? [], status: data.status, createdAt: "" };
 }
 
+// A stalled fetch has no default timeout in the browser -- without this,
+// a slow/hung R2 or Pexels response behind our own image proxy leaves the
+// whole download spinning forever with nothing to show for it (see the
+// comment on IMAGE_LOAD_TIMEOUT_MS in compose-slide-image.ts for the other
+// half of this -- image decode/font-load can hang too).
+const SLIDE_FETCH_TIMEOUT_MS = 20_000;
+
+async function fetchSlideImageBlob(purchaseId: string, index: number): Promise<Blob> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SLIDE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await authedFetch(
+      `${SERVER_URL}/api/purchases/${purchaseId}/slides/${index}/image`,
+      { signal: controller.signal },
+    );
+    if (!res.ok) throw new Error(`Slide ${index} image request failed (${res.status})`);
+    return await res.blob();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Replaces the old zip download entirely, not just its implementation --
 // a .zip is a real barrier for the non-technical creators this app is
 // for (unzipping isn't an obvious phone gesture, especially on iOS, and
@@ -66,6 +88,14 @@ export async function fetchPurchase(id: string): Promise<PurchaseSummary | null>
 // background photo, then hands the finished images to the native share
 // sheet -- "Save Images"/"Save to Photos" in one tap, the same gesture
 // people already use to save photos out of Messages or Instagram.
+//
+// Runs every slide concurrently (Promise.allSettled), not one at a time --
+// the sequential version blocked the entire download on whichever single
+// slide was slowest, and with no timeout anywhere in that chain a stuck
+// fetch or a stuck image decode meant the "downloading" spinner never
+// resolved and nothing after that slide ever ran (server logs would just
+// stop after N-1 image requests, exactly as seen: two slides logged, then
+// silence). Losing one slide to a timeout no longer sinks the rest.
 export async function saveSlidesToDevice(
   purchaseId: string,
   slides: { index: number; text: string; imageUrl?: string }[],
@@ -75,19 +105,23 @@ export async function saveSlidesToDevice(
     throw new Error("No images are available for this slideshow yet.");
   }
 
-  const files: File[] = [];
-  for (const slide of withImages) {
-    const res = await authedFetch(
-      `${SERVER_URL}/api/purchases/${purchaseId}/slides/${slide.index}/image`,
-    );
-    if (!res.ok) continue;
-    const backgroundBlob = await res.blob();
-    const composedBlob = await composeSlideImage(backgroundBlob, slide.text);
-    files.push(
-      new File([composedBlob], `slide-${String(slide.index).padStart(2, "0")}.png`, {
+  const results = await Promise.allSettled(
+    withImages.map(async (slide) => {
+      const backgroundBlob = await fetchSlideImageBlob(purchaseId, slide.index);
+      const composedBlob = await composeSlideImage(backgroundBlob, slide.text);
+      return new File([composedBlob], `slide-${String(slide.index).padStart(2, "0")}.png`, {
         type: "image/png",
-      }),
-    );
+      });
+    }),
+  );
+
+  const files: File[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      files.push(result.value);
+    } else {
+      console.error("Failed to prepare a slide for download", result.reason);
+    }
   }
 
   if (files.length === 0) {
