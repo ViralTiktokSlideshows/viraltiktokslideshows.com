@@ -1,15 +1,23 @@
 "use client";
 
-import { Check, Clock, Copy, Download, LayoutGrid, Loader2, Plus, Share, XCircle } from "lucide-react";
+import { Check, Clock, Copy, Download, LayoutGrid, Loader2, Plus, X, XCircle, Zap } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@viraltiktokslideshows/ui/components/alert-dialog";
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { env } from "@viraltiktokslideshows/env/web";
 
 import { GenerateShell } from "@/components/dashboard/generate-shell";
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
+import { useSession } from "@/lib/auth-client";
 import { downloadPurchaseZip } from "@/lib/purchases-client";
 import { fetchSettings } from "@/lib/settings-client";
 
@@ -64,11 +72,18 @@ function SuccessContent() {
   // /api/checkout/status so it can look the payment up directly instead of
   // waiting on a webhook that may never arrive in dev.
   const paymentId = searchParams.get("payment_id");
+  const { user } = useSession();
+  // Already-subscribed users have no reason to see an upgrade pitch --
+  // the popup below is gated on this, though the persistent "Upgrade plan"
+  // button next to Download stays visible either way (a subscriber jumping
+  // straight to /generate/upgrade to compare tiers is harmless).
+  const hasPlan = Boolean(user?.plan);
   const [status, setStatus] = useState<Status>("checking");
   const [idea, setIdea] = useState("");
   const [slides, setSlides] = useState<Slide[]>([]);
   const [copied, setCopied] = useState(false);
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   // Defaults to true (matches the User model's default) so hashtags don't
   // flash in and then disappear once the real preference loads.
   const [autoAppendHashtags, setAutoAppendHashtags] = useState(true);
@@ -148,151 +163,199 @@ function SuccessContent() {
       try {
         await downloadPurchaseZip(purchaseId);
         setDownloadState("idle");
-        // They've seen the slideshow and downloaded it -- there's nothing
-        // else to do on this page, so send them on to their dashboard
-        // rather than leaving them stranded on a "done" screen.
-        router.push("/dashboard");
+        // They've seen the slideshow and downloaded it -- right where
+        // conversion intent peaks. Subscribers skip straight to their
+        // dashboard (nothing to upsell); everyone else sees the upgrade
+        // popup first and lands on the dashboard once they close it (see
+        // the AlertDialog's onOpenChange below).
+        if (hasPlan) {
+          router.push("/dashboard");
+        } else {
+          setShowUpgradeModal(true);
+        }
       } catch (error) {
         console.error(error);
         setDownloadState("error");
       }
     }
 
+    // onOpenChange fires for every dismissal path (X, backdrop, Escape) as
+    // well as the controlled setShowUpgradeModal(true) above -- only route
+    // to the dashboard on the way *out*, once someone's actually done with
+    // the popup, not on the render that opens it.
+    function handleUpgradeModalChange(open: boolean) {
+      setShowUpgradeModal(open);
+      if (!open) router.push("/dashboard");
+    }
+
     return (
-      <GenerateShell>
-        <div className="flex-1 p-4 sm:p-6 lg:p-8">
-          <h1 className="font-display text-base font-bold text-foreground sm:text-lg">
-            Your slideshow
-          </h1>
+      <>
+        <GenerateShell>
+          <div className="flex-1 p-4 sm:p-6 lg:p-8">
+            <h1 className="font-display text-base font-bold text-foreground sm:text-lg">
+              Your slideshow
+            </h1>
 
-          <div className="mt-8 grid gap-10 lg:grid-cols-[240px_1fr]">
-            <SlideshowPhonePreview slides={slides} />
+            <div className="mt-8 grid gap-10 lg:grid-cols-[240px_1fr]">
+              <SlideshowPhonePreview slides={slides} />
 
-            <div>
-              <span className="inline-flex items-center gap-1.5 rounded-2xl bg-spark/15 px-2.5 py-1 text-[11px] font-semibold tracking-widest text-foreground uppercase">
-                <Check className="size-3" />
-                Slideshow unlocked
-              </span>
+              <div>
+                <span className="inline-flex items-center gap-1.5 rounded-2xl bg-spark/15 px-2.5 py-1 text-[11px] font-semibold tracking-widest text-foreground uppercase">
+                  <Check className="size-3" />
+                  Slideshow unlocked
+                </span>
 
-              <h2 className="mt-4 font-display text-2xl font-bold text-foreground sm:text-3xl">
-                Your slideshow is ready to post
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {idea || slides[0]?.text} <span className="text-muted-foreground/60">·</span>{" "}
-                {slides.length} slides
-              </p>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <Button
-                  size="lg"
-                  className="gap-2"
-                  onClick={handleDownload}
-                  disabled={!hasAnyImage || downloadState === "downloading"}
-                  title={
-                    hasAnyImage
-                      ? undefined
-                      : "No images generated for this slideshow yet — try regenerating it"
-                  }
-                >
-                  {downloadState === "downloading" ? (
-                    <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
-                  ) : (
-                    <Download className="size-4" data-icon="inline-start" />
-                  )}
-                  Download all {slides.length} slides
-                </Button>
-                {/* Writing directly to a device's camera roll isn't something a
-                    web app can do — that needs a native app / share-sheet
-                    integration, not a browser API. Leaving this stubbed rather
-                    than faking it. */}
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="gap-2"
-                  disabled
-                  title="Only possible from a native app — not something a browser can do"
-                >
-                  <Share className="size-4" data-icon="inline-start" />
-                  Save to camera roll
-                </Button>
-              </div>
-              {downloadState === "error" ? (
-                <p className="mt-2 text-xs text-destructive">
-                  Couldn&apos;t download — the images may have expired. Try regenerating this
-                  slideshow.
+                <h2 className="mt-4 font-display text-2xl font-bold text-foreground sm:text-3xl">
+                  Your slideshow is ready to post
+                </h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {idea || slides[0]?.text} <span className="text-muted-foreground/60">·</span>{" "}
+                  {slides.length} slides
                 </p>
-              ) : null}
 
-              <div className="mt-6 rounded-2xl border border-border bg-background p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-                    Caption & hashtags
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleCopyAll}
-                    className="flex items-center gap-1 text-xs font-medium text-riot hover:underline"
-                  >
-                    {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-                    {copied ? "Copied" : "Copy all"}
-                  </button>
-                </div>
-                <p className="mt-2 text-sm text-foreground">{caption}</p>
-                {autoAppendHashtags ? (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {hashtags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-2xl bg-accent/10 px-2 py-0.5 text-xs text-accent"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Hashtags are off —{" "}
-                    <Link href="/dashboard/settings" className="text-riot hover:underline">
-                      turn them back on in Settings
-                    </Link>
-                    .
-                  </p>
-                )}
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 rounded-2xl bg-void px-3 py-2 text-xs text-bone">
-                  <Clock className="size-3.5 text-spark" />
-                  Evenings (7–9pm) tend to post best
-                </div>
-                <div className="flex gap-2">
+                <div className="mt-6 flex flex-wrap gap-3">
                   <Button
+                    size="lg"
+                    className="gap-2"
+                    onClick={handleDownload}
+                    disabled={!hasAnyImage || downloadState === "downloading"}
+                    title={
+                      hasAnyImage
+                        ? undefined
+                        : "No images generated for this slideshow yet — try regenerating it"
+                    }
+                  >
+                    {downloadState === "downloading" ? (
+                      <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+                    ) : (
+                      <Download className="size-4" data-icon="inline-start" />
+                    )}
+                    Download all {slides.length} slides
+                  </Button>
+                  <Button
+                    size="lg"
                     variant="outline"
-                    className="gap-1.5"
+                    className="gap-2"
                     nativeButton={false}
-                    render={<Link href="/generate" />}
+                    render={<Link href="/generate/upgrade" />}
                   >
-                    <Plus className="size-4" data-icon="inline-start" />
-                    Generate another
+                    <Zap className="size-4" data-icon="inline-start" />
+                    Upgrade plan
                   </Button>
-                  {/* For anyone who saw the slideshow and decided not to
-                      download it right now -- same destination handleDownload
-                      lands on, just without waiting on a file to save first. */}
-                  <Button
-                    variant="ghost"
-                    className="gap-1.5"
-                    nativeButton={false}
-                    render={<Link href="/dashboard" />}
-                  >
-                    <LayoutGrid className="size-4" data-icon="inline-start" />
-                    Go to dashboard
-                  </Button>
+                </div>
+                {downloadState === "error" ? (
+                  <p className="mt-2 text-xs text-destructive">
+                    Couldn&apos;t download — the images may have expired. Try regenerating this
+                    slideshow.
+                  </p>
+                ) : null}
+
+                <div className="mt-6 rounded-2xl border border-border bg-background p-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+                      Caption & hashtags
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleCopyAll}
+                      className="flex items-center gap-1 text-xs font-medium text-riot hover:underline"
+                    >
+                      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                      {copied ? "Copied" : "Copy all"}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-sm text-foreground">{caption}</p>
+                  {autoAppendHashtags ? (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {hashtags.map((tag) => (
+                        <span
+                          key={tag}
+                          className="rounded-2xl bg-accent/10 px-2 py-0.5 text-xs text-accent"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Hashtags are off —{" "}
+                      <Link href="/dashboard/settings" className="text-riot hover:underline">
+                        turn them back on in Settings
+                      </Link>
+                      .
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 rounded-2xl bg-void px-3 py-2 text-xs text-bone">
+                    <Clock className="size-3.5 text-spark" />
+                    Evenings (7–9pm) tend to post best
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="gap-1.5"
+                      nativeButton={false}
+                      render={<Link href="/generate" />}
+                    >
+                      <Plus className="size-4" data-icon="inline-start" />
+                      Generate another
+                    </Button>
+                    {/* For anyone who saw the slideshow and decided not to
+                        download it right now -- same destination handleDownload
+                        lands on, just without waiting on a file to save first. */}
+                    <Button
+                      variant="ghost"
+                      className="gap-1.5"
+                      nativeButton={false}
+                      render={<Link href="/dashboard" />}
+                    >
+                      <LayoutGrid className="size-4" data-icon="inline-start" />
+                      Go to dashboard
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </GenerateShell>
+        </GenerateShell>
+
+        <AlertDialog open={showUpgradeModal} onOpenChange={handleUpgradeModalChange}>
+          <AlertDialogPopup className="w-[26rem] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden border-0 bg-void p-0 text-bone">
+            <div className="relative p-6">
+              <AlertDialogClose
+                aria-label="Close"
+                className="absolute top-4 right-4 rounded-full p-1 text-bone/50 transition-colors hover:bg-bone/10 hover:text-bone"
+              >
+                <X className="size-4" />
+              </AlertDialogClose>
+
+              <span className="flex size-11 items-center justify-center rounded-2xl bg-spark/15">
+                <Zap className="size-5 text-spark" />
+              </span>
+
+              <AlertDialogTitle className="mt-4 text-bone">
+                Loved your first slideshow?
+              </AlertDialogTitle>
+              <AlertDialogDescription className="mt-1.5 text-bone/70">
+                That one cost $2. A plan gets you dozens more every month for a fraction of the
+                per-slideshow price — starting at 20 slideshows for less than the price of two.
+              </AlertDialogDescription>
+
+              <Button
+                size="lg"
+                className="mt-5 w-full justify-center gap-1.5 bg-spark text-void hover:bg-spark/90"
+                nativeButton={false}
+                render={<Link href="/generate/upgrade" />}
+              >
+                <Zap className="size-4" data-icon="inline-start" />
+                Select a plan
+              </Button>
+            </div>
+          </AlertDialogPopup>
+        </AlertDialog>
+      </>
     );
   }
 
