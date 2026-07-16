@@ -24,6 +24,7 @@ import {
 } from "./lib/google-oauth";
 import { isMagicLinkRateLimited, sendMagicLinkEmail, verifyMagicLinkToken } from "./lib/magic-link";
 import { getPlanUsage, planTierForProductId, productIdForPlanTier } from "./lib/plans";
+import { reconcilePendingPurchase, reconcilePendingPurchases } from "./lib/purchase-status";
 import { getClientIp, isRateLimited } from "./lib/rate-limit";
 import { verifyTurnstileToken } from "./lib/turnstile";
 import {
@@ -669,12 +670,23 @@ app.get("/api/checkout/status", async (c) => {
   // Fallback for when the webhook hasn't (or can't) land: Dodo's webhook
   // servers can't reach a local http://localhost:3000 during dev, so a
   // PENDING row here can sit forever with no error -- and even in prod the
-  // webhook can lag behind the customer's redirect back to us. Dodo's own
-  // return_url already carries a payment_id, so if the client passes it and
-  // we're still PENDING, look the payment up directly instead of waiting on
-  // a webhook that may never arrive. metadata.purchaseId is checked against
-  // *this* purchase (not just trusted from the query string) so a guessed
-  // or spoofed payment_id can't be used to mark someone else's purchase paid.
+  // webhook can lag behind the customer's redirect back to us. Checked
+  // directly against the checkout session id already stored on the row
+  // (see reconcilePendingPurchase) -- no client-supplied id required, so
+  // this works even if the redirect back here somehow dropped its query
+  // params.
+  if (purchase.status === "PENDING") {
+    purchase = await reconcilePendingPurchase(purchase);
+  }
+
+  // Secondary fallback, kept for the narrow window right after
+  // /api/checkout/create where dodoCheckoutId hasn't been saved to the row
+  // yet (the Dodo session call and the update that stores it aren't
+  // atomic). Dodo's own return_url carries a payment_id in that case, so if
+  // the client passes it and we're still PENDING, look the payment up
+  // directly instead. metadata.purchaseId is checked against *this*
+  // purchase (not just trusted from the query string) so a guessed or
+  // spoofed payment_id can't be used to mark someone else's purchase paid.
   const paymentId = c.req.query("payment_id");
   if (purchase.status === "PENDING" && paymentId) {
     try {
@@ -725,10 +737,16 @@ app.get("/api/purchases", async (c) => {
     return c.json({ error: "Not authenticated" }, 401);
   }
 
-  const purchases = await prisma.purchase.findMany({
+  const rawPurchases = await prisma.purchase.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: "desc" },
   });
+
+  // Nothing else looks at a PENDING row after the customer leaves
+  // /generate/success -- reconcile them here too, or an abandoned/missed
+  // webhook leaves it reading "Confirming payment..." on this page forever.
+  // Purchases that aren't PENDING pass straight through untouched.
+  const purchases = await reconcilePendingPurchases(rawPurchases);
 
   return c.json({
     purchases: purchases.map((p) => ({
