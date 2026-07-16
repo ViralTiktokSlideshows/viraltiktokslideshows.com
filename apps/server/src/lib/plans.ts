@@ -55,7 +55,19 @@ export type PlanUsage = {
 // counter on User that could drift out of sync with what was actually
 // generated.
 export async function getPlanUsage(user: User): Promise<PlanUsage | null> {
-  if (!user.planTier || user.planStatus !== "ACTIVE" || !user.planPeriodStart) {
+  // Dodo cancellations are cancel-at-period-end (see the subscription.cancelled
+  // handler in apps/server/src/index.ts) -- someone who cancels keeps their
+  // quota through whatever they already paid for, rather than losing it the
+  // instant the webhook lands. Once planPeriodEnd actually passes, treat a
+  // still-CANCELED row exactly like no plan at all rather than waiting on a
+  // separate subscription.expired webhook to flip it.
+  const stillInGracePeriod =
+    user.planStatus === "CANCELED" && user.planPeriodEnd !== null && user.planPeriodEnd > new Date();
+
+  if (!user.planTier || !user.planPeriodStart) {
+    return null;
+  }
+  if (user.planStatus !== "ACTIVE" && !stillInGracePeriod) {
     return null;
   }
 

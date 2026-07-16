@@ -866,13 +866,13 @@ app.post("/api/webhooks/dodo", async (c) => {
   // from here, so double check field names once DODO_PAYMENTS_WEBHOOK_KEY
   // is wired to a real account with an active subscription product.
   //
-  // Known gap: Dodo doesn't document a dedicated "subscription.cancelled"
-  // event -- cancellation appears to surface via the generic
-  // "subscription.updated" event instead, which isn't handled here yet. In
-  // the meantime a cancelled plan simply stops renewing (no more
-  // subscription.renewed webhooks), so planPeriodEnd naturally caps access
-  // once the current period lapses -- degraded gracefully, just not
-  // reflected in the UI the instant someone cancels.
+  // subscription.cancelled and subscription.expired are both real,
+  // documented Dodo event types (confirmed against the dodopayments SDK's
+  // own WebhookEventType union) -- the earlier assumption that cancellation
+  // only surfaced via the generic "subscription.updated" event was wrong,
+  // and left cancelled subscribers stuck on planStatus: "ACTIVE" forever
+  // (getPlanUsage in lib/plans.ts only checks that one field, so nothing
+  // ever actually cut off their quota). Both handled explicitly below.
   if (type?.startsWith("subscription.")) {
     const data = payload?.data;
     const dodoSubscriptionId: string | undefined = data?.subscription_id;
@@ -916,6 +916,24 @@ app.post("/api/webhooks/dodo", async (c) => {
       await prisma.user.updateMany({
         where: { dodoSubscriptionId },
         data: { planStatus: "FAILED" },
+      });
+    } else if (type === "subscription.cancelled" && dodoSubscriptionId) {
+      // Dodo cancellations are cancel-at-period-end -- deliberately leave
+      // planPeriodEnd untouched so getPlanUsage's grace-period check (see
+      // lib/plans.ts) keeps quota usable through what's already been paid
+      // for, instead of cutting access off mid-period the instant someone
+      // cancels.
+      await prisma.user.updateMany({
+        where: { dodoSubscriptionId },
+        data: { planStatus: "CANCELED" },
+      });
+    } else if (type === "subscription.expired" && dodoSubscriptionId) {
+      // Terminal -- the paid period is genuinely over with nothing left to
+      // grace-period against. Kept distinct from "cancelled" so the two are
+      // still visible as different states even though both end access.
+      await prisma.user.updateMany({
+        where: { dodoSubscriptionId },
+        data: { planStatus: "EXPIRED" },
       });
     }
 
