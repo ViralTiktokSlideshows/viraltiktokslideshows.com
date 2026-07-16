@@ -2,7 +2,10 @@
 
 import { env } from "@viraltiktokslideshows/env/web";
 
-import type { SlideTextPosition } from "@/components/generate/slide-text-style";
+import type {
+  SlideTextPosition,
+  SlideTextStyle,
+} from "@/components/generate/slide-text-style";
 
 import { authedFetch } from "./api-fetch";
 
@@ -25,6 +28,7 @@ export type PendingSlide = {
   text: string;
   imageUrl?: string;
   textPosition?: SlideTextPosition;
+  textStyle?: SlideTextStyle;
   visual?: string;
 };
 
