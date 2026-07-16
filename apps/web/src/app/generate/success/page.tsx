@@ -84,6 +84,11 @@ function SuccessContent() {
   const [copied, setCopied] = useState(false);
   const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  // Whether this unlock is a repeat purchase (see hasPriorPurchase on
+  // /api/checkout/status) -- swaps the upgrade pitch from a first-timer
+  // intro to a "you're already paying twice, here's what a plan saves you"
+  // framing, both on the persistent button and the post-download popup.
+  const [isRepeatBuyer, setIsRepeatBuyer] = useState(false);
   // Defaults to true (matches the User model's default) so hashtags don't
   // flash in and then disappear once the real preference loads.
   const [autoAppendHashtags, setAutoAppendHashtags] = useState(true);
@@ -126,6 +131,7 @@ function SuccessContent() {
 
         setIdea(typeof data.idea === "string" ? data.idea : "");
         setSlides(Array.isArray(data.slides) ? data.slides : []);
+        setIsRepeatBuyer(Boolean(data.hasPriorPurchase));
 
         if (data.status === "PAID") {
           setStatus("paid");
@@ -246,7 +252,7 @@ function SuccessContent() {
                     render={<Link href="/generate/upgrade" />}
                   >
                     <Zap className="size-4" data-icon="inline-start" />
-                    Upgrade plan
+                    {isRepeatBuyer ? "Choose a plan" : "Upgrade plan"}
                   </Button>
                 </div>
                 {downloadState === "error" ? (
@@ -342,11 +348,12 @@ function SuccessContent() {
               </span>
 
               <AlertDialogTitle className="mt-4 text-bone">
-                Loved your first slideshow?
+                {isRepeatBuyer ? "Choose a plan to save 50%" : "Loved your first slideshow?"}
               </AlertDialogTitle>
               <AlertDialogDescription className="mt-1.5 text-bone/70">
-                That one cost $2. A plan gets you dozens more every month for a fraction of the
-                per-slideshow price — starting at 20 slideshows for less than the price of two.
+                {isRepeatBuyer
+                  ? "You've paid $2 a slideshow more than once now. A plan cuts that to $1 each — starting at $19.99/mo for 20 slideshows."
+                  : "That one cost $2. A plan drops the price to $1 a slideshow — plans start at $19.99/mo for 20 slideshows."}
               </AlertDialogDescription>
 
               <Button
@@ -356,7 +363,7 @@ function SuccessContent() {
                 render={<Link href="/generate/upgrade" />}
               >
                 <Zap className="size-4" data-icon="inline-start" />
-                Select a plan
+                {isRepeatBuyer ? "Choose a plan" : "Select a plan"}
               </Button>
             </div>
           </AlertDialogPopup>
