@@ -1,12 +1,13 @@
 "use client";
 
-import { Loader2, RotateCw, Star } from "lucide-react";
+import { Download, Loader2, RotateCw, Star } from "lucide-react";
 import Link from "next/link";
+import { type MouseEvent, useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
-import { formatRelativeTime, type PurchaseSummary } from "@/lib/purchases-client";
+import { downloadPurchaseZip, formatRelativeTime, type PurchaseSummary } from "@/lib/purchases-client";
 
 const STRIPES =
   "bg-[repeating-linear-gradient(135deg,var(--color-muted)_0px,var(--color-muted)_10px,transparent_10px,transparent_20px)]";
@@ -25,10 +26,30 @@ export function SlideshowCard({
   purchase: PurchaseSummary;
   onToggleSaved?: (id: string, saved: boolean) => void;
 }) {
+  const [downloadState, setDownloadState] = useState<"idle" | "downloading" | "error">("idle");
   const title = purchase.slides[0]?.text || purchase.idea || "Untitled slideshow";
   const config = STATUS_CONFIG[purchase.status];
   const relative = purchase.createdAt ? formatRelativeTime(purchase.createdAt) : "";
   const thumbnailUrl = purchase.slides[0]?.imageUrl;
+  const hasAnyImage = purchase.slides.some((slide) => slide.imageUrl);
+
+  // Stops the click from bubbling into the "View slideshow" link the button
+  // sits next to and grabs the zip right from the card -- same download
+  // used on the detail page and /generate/success, just without leaving
+  // /dashboard for it.
+  async function handleDownload(event: MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (downloadState === "downloading") return;
+    setDownloadState("downloading");
+    try {
+      await downloadPurchaseZip(purchase.id);
+      setDownloadState("idle");
+    } catch (error) {
+      console.error(error);
+      setDownloadState("error");
+    }
+  }
 
   const subtext =
     purchase.status === "PENDING"
@@ -80,14 +101,36 @@ export function SlideshowCard({
         </p>
 
         {purchase.status === "PAID" ? (
-          <Button
-            size="sm"
-            className="mt-auto w-full justify-center bg-void text-bone hover:bg-void/90"
-            nativeButton={false}
-            render={<Link href={`/dashboard/${purchase.id}`} />}
-          >
-            View slideshow
-          </Button>
+          <div className="mt-auto flex gap-2">
+            <Button
+              size="sm"
+              className="flex-1 justify-center bg-void text-bone hover:bg-void/90"
+              nativeButton={false}
+              render={<Link href={`/dashboard/${purchase.id}`} />}
+            >
+              View slideshow
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              aria-label="Download slides"
+              title={
+                !hasAnyImage
+                  ? "No images available for this slideshow"
+                  : downloadState === "error"
+                    ? "Couldn't download — try again"
+                    : "Download slides"
+              }
+              onClick={handleDownload}
+              disabled={!hasAnyImage || downloadState === "downloading"}
+            >
+              {downloadState === "downloading" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Download className="size-3.5" />
+              )}
+            </Button>
+          </div>
         ) : purchase.status === "PENDING" ? (
           <Button size="sm" disabled className="mt-auto w-full justify-center gap-1.5">
             <Loader2 className="size-3.5 animate-spin" />

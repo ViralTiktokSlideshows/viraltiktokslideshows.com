@@ -104,6 +104,12 @@ function SuccessContent() {
     let attempts = 0;
 
     async function poll() {
+      // Redundant with the outer guard above at first glance, but that
+      // narrowing doesn't carry into this nested closure as far as
+      // TypeScript's control-flow analysis is concerned -- purchaseId is
+      // still `string | null` from its perspective here without this.
+      if (!purchaseId) return;
+
       attempts += 1;
       try {
         const statusUrl = new URL(`${env.NEXT_PUBLIC_SERVER_URL}/api/checkout/status`);
