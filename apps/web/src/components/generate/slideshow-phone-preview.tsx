@@ -5,13 +5,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
-import { justifyForPosition, type SlideTextPosition } from "./slide-text-style";
+import {
+  justifyForPosition,
+  naturalJitter,
+  type SlideTextPosition,
+  type SlideTextStyle,
+} from "./slide-text-style";
 
 export type PreviewSlide = {
   index: number;
   text: string;
   imageUrl?: string;
   textPosition?: SlideTextPosition;
+  textStyle?: SlideTextStyle;
 };
 
 const STRIPES =
@@ -122,28 +128,44 @@ export function SlideshowPhonePreview({ slides }: { slides: PreviewSlide[] }) {
           {active + 1} / {slides.length}
         </span>
 
-        {/* Each slide places its own text where its background photo left
-            room (top/center/bottom -- see slide-text-style.ts and the
-            matching composition in the server's image prompt), instead of a
-            fixed spot for the whole deck. A full-height flex column anchors
-            the block to the chosen edge; the canvas export
-            (compose-slide-image.ts) targets the same three anchors so the
-            saved image matches this preview. The stroke is a stacked
-            text-shadow (not -webkit-text-stroke) so it renders consistently
-            across browsers regardless of what's behind it. */}
+        {/* Two real-TikTok text treatments, matched to reference slideshows
+            (see slide-text-style.ts): "boxed" draws black text inside
+            per-line white pills (box-decoration-break: clone gives each
+            wrapped line its own rounded background, exactly like TikTok's
+            caption sticker); "outlined" draws bold white text with a thin
+            dark outline. Each slide also places its text top/center/bottom
+            where its photo left room. The canvas export
+            (compose-slide-image.ts) mirrors both styles so the downloaded
+            image matches this preview. */}
         <div
-          className="absolute inset-x-[8%] inset-y-[7%] flex flex-col"
-          style={{ justifyContent: justifyForPosition(slide?.textPosition ?? "top") }}
+          className="absolute inset-x-[9%] inset-y-[14%] flex flex-col text-center"
+          style={{
+            justifyContent: justifyForPosition(slide?.textPosition ?? "top"),
+            transform: `translate(${naturalJitter(slide?.text ?? "").xRatio * 100}%, ${
+              naturalJitter(slide?.text ?? "").yRatio * 100
+            }%)`,
+          }}
         >
-          <p
-            className="font-display text-[17px] leading-[1.15] font-bold text-white"
-            style={{
-              textShadow:
-                "-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 2px 5px rgba(0,0,0,0.4)",
-            }}
-          >
-            {slide?.text}
-          </p>
+          {(slide?.textStyle ?? "boxed") === "boxed" ? (
+            <p className="font-display text-[15px] leading-[1.5] font-bold">
+              <span
+                className="box-decoration-clone rounded-[5px] bg-white px-[0.3em] py-[0.06em] text-[#111]"
+                style={{ WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" }}
+              >
+                {slide?.text}
+              </span>
+            </p>
+          ) : (
+            <p
+              className="font-display text-[16px] leading-[1.35] font-bold text-white"
+              style={{
+                textShadow:
+                  "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 2px 5px rgba(0,0,0,0.5)",
+              }}
+            >
+              {slide?.text}
+            </p>
+          )}
         </div>
 
         <div className="absolute top-1/2 right-2.5 flex -translate-y-1/2 flex-col items-center gap-4">
