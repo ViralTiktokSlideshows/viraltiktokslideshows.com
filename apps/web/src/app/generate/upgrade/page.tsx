@@ -81,7 +81,26 @@ function UpgradeContent() {
           Subscribe for a monthly batch of unlocked slideshows instead of paying $2 each time.
         </p>
 
-        <div className="mt-8 grid w-full max-w-2xl gap-4 sm:grid-cols-2">
+        <div className="mt-8 grid w-full max-w-3xl gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-border bg-card p-5 text-left">
+            <p className="text-sm font-semibold text-foreground">Creator</p>
+            <p className="mt-2 font-display text-2xl font-bold text-foreground">
+              $19.99<span className="text-sm font-normal text-muted-foreground">/mo</span>
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">20 slideshows / month</p>
+            <Button
+              variant="outline"
+              className="mt-4 w-full justify-center"
+              disabled={loadingTier !== null}
+              onClick={() => handleUpgrade("CREATOR")}
+            >
+              {loadingTier === "CREATOR" ? (
+                <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
+              ) : null}
+              Upgrade to Creator
+            </Button>
+          </div>
+
           <div className="relative rounded-2xl border-2 border-void bg-void p-5 text-left text-bone">
             <span className="absolute -top-2.5 right-5 rounded-2xl bg-spark px-2 py-0.5 text-[10px] font-semibold tracking-widest text-void uppercase">
               Recommended
