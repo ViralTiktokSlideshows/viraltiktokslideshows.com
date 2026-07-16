@@ -5,7 +5,6 @@ import * as arctic from "arctic";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import JSZip from "jszip";
 import { Webhook } from "standardwebhooks";
 
 import {
@@ -801,19 +800,28 @@ app.patch("/api/purchases/:id", async (c) => {
   return c.json({ id: updated.id, saved: updated.saved });
 });
 
-// Real slide download (#2 from the loose-ends list) — fetches each
-// slide's image server-side (avoids trusting the browser to read
-// cross-origin bytes from Ideogram's CDN) and zips them into one file.
-// Ownership-checked: only the user who unlocked this purchase can
-// download it. Ideogram's image URLs are ephemeral, so this can fail if
-// enough time has passed since checkout — see the note in lib/ideogram.ts.
-app.get("/api/purchases/:id/download", async (c) => {
+// Streams a single slide's plain background image, fetched server-side --
+// same reasoning as the zip endpoint this replaced: avoids the browser
+// needing CORS-permitted cross-origin reads of R2 bytes, since the
+// response comes from our own API origin instead. The web app draws the
+// actual slide text on top of this at full resolution before saving/
+// sharing it (see apps/web/src/lib/compose-slide-image.ts) -- this
+// endpoint only ever returns the bare photo, not a finished slide.
+//
+// Replaced the old zip download entirely (not just this endpoint's
+// shape): a .zip is a real barrier for the non-technical creators this
+// app is for -- unzipping isn't an obvious step on a phone, especially
+// iOS, and the file manager required to do it isn't something everyone
+// has opened before. Individual images, saved straight to Photos via the
+// share sheet, are the format people already know how to handle.
+app.get("/api/purchases/:id/slides/:index/image", async (c) => {
   const user = c.get("user");
   if (!user) {
     return c.json({ error: "Not authenticated" }, 401);
   }
 
   const purchaseId = c.req.param("id");
+  const index = Number(c.req.param("index"));
   const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
 
   if (!purchase || purchase.userId !== user.id) {
@@ -826,42 +834,26 @@ app.get("/api/purchases/:id/download", async (c) => {
   const slides = Array.isArray(purchase.slides)
     ? (purchase.slides as { index: number; text: string; imageUrl?: string }[])
     : [];
-  const withImages = slides.filter((slide) => slide.imageUrl);
+  const slide = slides.find((s) => s.index === index);
 
-  if (withImages.length === 0) {
-    return c.json({ error: "No images are available for this slideshow yet" }, 404);
+  if (!slide?.imageUrl) {
+    return c.json({ error: "No image for this slide" }, 404);
   }
 
-  const zip = new JSZip();
-  const results = await Promise.allSettled(
-    withImages.map(async (slide) => {
-      const res = await fetch(slide.imageUrl as string);
-      if (!res.ok) throw new Error(`Failed to fetch slide ${slide.index} image`);
-      const buffer = await res.arrayBuffer();
-      zip.file(`slide-${String(slide.index).padStart(2, "0")}.png`, buffer);
-    }),
-  );
-
-  const allFailed = results.every((result) => result.status === "rejected");
-  if (allFailed) {
-    // Almost certainly the ephemeral Ideogram URLs expired.
+  const res = await fetch(slide.imageUrl);
+  if (!res.ok) {
+    // Almost certainly an ephemeral Ideogram fallback URL that expired --
+    // the normal Pexels/R2 path is permanent and shouldn't hit this.
     return c.json(
-      { error: "These images have expired. Regenerate the slideshow to download it." },
+      { error: "This image has expired. Regenerate the slideshow to download it." },
       410,
     );
   }
 
-  // "uint8array" (not "nodebuffer") — Hono's c.body() wants a plain
-  // Uint8Array<ArrayBuffer>, and Node's Buffer type doesn't structurally
-  // match that under strict TS lib typings. Uint8Array.from(...) forces a
-  // freshly-allocated, non-shared ArrayBuffer backing so it satisfies that
-  // generic even though JSZip's own return type is Uint8Array<ArrayBufferLike>.
-  const zipBuffer = Uint8Array.from(await zip.generateAsync({ type: "uint8array" }));
+  const contentType = res.headers.get("content-type") || "image/png";
+  const buffer = new Uint8Array(await res.arrayBuffer());
 
-  return c.body(zipBuffer, 200, {
-    "Content-Type": "application/zip",
-    "Content-Disposition": `attachment; filename="slideshow-${purchase.id}.zip"`,
-  });
+  return c.body(buffer, 200, { "Content-Type": contentType });
 });
 
 // Dodo Payments webhook — confirms or fails a Purchase once the customer

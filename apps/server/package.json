@@ -17,7 +17,6 @@
     "dodopayments": "^2.42.2",
     "dotenv": "catalog:",
     "hono": "^4.12.27",
-    "jszip": "^3.10.1",
     "nodemailer": "^8.0.10",
     "standardwebhooks": "^1.0.0",
     "zod": "catalog:"

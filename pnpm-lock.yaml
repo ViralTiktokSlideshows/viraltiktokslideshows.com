@@ -196,9 +196,6 @@ importers:
       hono:
         specifier: ^4.12.27
         version: 4.12.29
-      jszip:
-        specifier: ^3.10.1
-        version: 3.10.1
       nodemailer:
         specifier: ^8.0.10
         version: 8.0.11

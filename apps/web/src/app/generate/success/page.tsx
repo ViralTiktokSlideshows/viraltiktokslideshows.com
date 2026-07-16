@@ -18,7 +18,7 @@ import { env } from "@viraltiktokslideshows/env/web";
 import { GenerateShell } from "@/components/dashboard/generate-shell";
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
 import { useSession } from "@/lib/auth-client";
-import { downloadPurchaseZip } from "@/lib/purchases-client";
+import { saveSlidesToDevice } from "@/lib/purchases-client";
 import { fetchSettings } from "@/lib/settings-client";
 
 // Dodo Payments return_url destination (see apps/server/src/index.ts's
@@ -179,7 +179,7 @@ function SuccessContent() {
       if (!purchaseId) return;
       setDownloadState("downloading");
       try {
-        await downloadPurchaseZip(purchaseId);
+        await saveSlidesToDevice(purchaseId, slides);
         setDownloadState("idle");
         // They've seen the slideshow and downloaded it -- right where
         // conversion intent peaks. Subscribers skip straight to their

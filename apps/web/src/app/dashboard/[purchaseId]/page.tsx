@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
-import { downloadPurchaseZip, fetchPurchase, type PurchaseSummary } from "@/lib/purchases-client";
+import { fetchPurchase, saveSlidesToDevice, type PurchaseSummary } from "@/lib/purchases-client";
 
 export default function SlideshowDetailPage() {
   const params = useParams<{ purchaseId: string }>();
@@ -48,7 +48,7 @@ export default function SlideshowDetailPage() {
     if (purchase === null || purchase === "not_found") return;
     setDownloadState("downloading");
     try {
-      await downloadPurchaseZip(purchase.id);
+      await saveSlidesToDevice(purchase.id, purchase.slides);
       setDownloadState("idle");
     } catch (error) {
       console.error(error);

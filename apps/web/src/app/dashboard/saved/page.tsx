@@ -10,9 +10,9 @@ import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 import { EmptyIllustration } from "@/components/dashboard/empty-illustration";
 import { Reveal } from "@/components/reveal";
 import {
-  downloadPurchaseZip,
   fetchPurchases,
   formatRelativeTime,
+  saveSlidesToDevice,
   toggleSaved,
   type PurchaseSummary,
 } from "@/lib/purchases-client";
@@ -42,7 +42,7 @@ function SavedCard({
     if (downloadState === "downloading") return;
     setDownloadState("downloading");
     try {
-      await downloadPurchaseZip(purchase.id);
+      await saveSlidesToDevice(purchase.id, purchase.slides);
       setDownloadState("idle");
     } catch (error) {
       console.error(error);

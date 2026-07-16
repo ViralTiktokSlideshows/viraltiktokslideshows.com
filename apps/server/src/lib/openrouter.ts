@@ -38,6 +38,7 @@ Rules:
 - 6 to 8 slides total.
 - Slide 1 is the hook: it must earn the next slide in under a second — a bold claim, a specific number, a "nobody tells you" angle, or a direct question. No generic openers.
 - Each slide is one short sentence: punchy, no hashtags, no emoji, no slide numbers or labels in the text itself.
+- Hard cap: 8 words / 55 characters per slide, no exceptions. This text gets rendered as large, bold overlay text on top of a photo — think "Ego is the enemy" or "Force consistency," not a full sentence with clauses. If an idea needs more than that to land, cut it down to its sharpest phrase rather than shortening word-by-word.
 - The deck should build: hook, tension/context, 3-5 payoff/insight slides, a closing slide that lands the point.
 - Write in a confident, conversational voice — like a smart friend explaining something, not a corporate caption.`;
 

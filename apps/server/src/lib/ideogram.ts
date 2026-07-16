@@ -56,8 +56,15 @@ type IdeogramResponse = {
   data: IdeogramImageObject[];
 };
 
+// Composition guidance below is modeled on real viral book/lifestyle
+// slideshow accounts (e.g. subject shot low-and-center against a plain
+// wall, or a lifestyle scene with a soft/blurred upper region) — the
+// common thread is a visually quiet upper third with the actual subject
+// occupying the lower two-thirds, so overlaid text never fights the
+// subject for attention. See SlideshowPhonePreview for where the text
+// itself gets placed against this composition.
 function buildImagePrompt(slideText: string): string {
-  return `A vertical, mobile-first background photo for a TikTok slideshow slide. Slide topic: "${slideText}". Minimal and cinematic, realistic photography style, no embedded text, no captions, no watermarks, no logos — the image is a backdrop only, text gets overlaid separately.`;
+  return `A vertical, mobile-first background photo for a TikTok slideshow slide. Slide topic: "${slideText}". Minimal and cinematic, realistic photography style, no embedded text, no captions, no watermarks, no logos — the image is a backdrop only, text gets overlaid separately. Compose the shot with the main subject low-and-center, occupying the lower two-thirds of the frame — the upper third should be visually quiet and uncluttered (a plain wall, open sky, or soft out-of-focus background), with no busy detail there, so bold overlay text can sit in that space without competing with the subject.`;
 }
 
 // `context` is a free-text label for where this call came from (e.g.

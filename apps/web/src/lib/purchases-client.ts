@@ -3,6 +3,7 @@
 import { env } from "@viraltiktokslideshows/env/web";
 
 import { authedFetch } from "./api-fetch";
+import { composeSlideImage } from "./compose-slide-image";
 
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 
@@ -53,34 +54,76 @@ export async function fetchPurchase(id: string): Promise<PurchaseSummary | null>
   return { id, idea: data.idea ?? "", slides: data.slides ?? [], status: data.status, createdAt: "" };
 }
 
-// Real download — server fetches each slide's image and zips them (see
-// GET /api/purchases/:id/download), so this is just triggering a browser
-// save on whatever comes back, not building anything client-side.
-export async function downloadPurchaseZip(purchaseId: string): Promise<void> {
-  const res = await authedFetch(`${SERVER_URL}/api/purchases/${purchaseId}/download`);
-
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data?.error ?? "Could not download this slideshow.");
+// Replaces the old zip download entirely, not just its implementation --
+// a .zip is a real barrier for the non-technical creators this app is
+// for (unzipping isn't an obvious phone gesture, especially on iOS, and
+// even setting that aside, blob-URL <a download> links are notoriously
+// unreliable specifically on iOS Safari). Fetches each slide's bare
+// background image through our own API (same-origin, so no cross-origin
+// R2 fetch/CORS surprises), bakes the actual slide text onto it
+// client-side at full resolution (see compose-slide-image.ts) so the
+// saved file matches what's shown in the app instead of a textless
+// background photo, then hands the finished images to the native share
+// sheet -- "Save Images"/"Save to Photos" in one tap, the same gesture
+// people already use to save photos out of Messages or Instagram.
+export async function saveSlidesToDevice(
+  purchaseId: string,
+  slides: { index: number; text: string; imageUrl?: string }[],
+): Promise<void> {
+  const withImages = slides.filter((slide) => slide.imageUrl);
+  if (withImages.length === 0) {
+    throw new Error("No images are available for this slideshow yet.");
   }
 
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `slideshow-${purchaseId}.zip`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  // Revoking the object URL synchronously right after click() was the bug:
-  // click() returns before the browser's download manager has necessarily
-  // finished reading from the blob: URL, especially for a multi-MB zip of
-  // full-resolution slide images. Revoke it too early and the download just
-  // hangs indefinitely (or silently never starts) instead of erroring --
-  // which is exactly "click Download, nothing happens" with no console
-  // error to go on. A short delay lets the browser actually grab the bytes
-  // before the URL is torn down.
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  const files: File[] = [];
+  for (const slide of withImages) {
+    const res = await authedFetch(
+      `${SERVER_URL}/api/purchases/${purchaseId}/slides/${slide.index}/image`,
+    );
+    if (!res.ok) continue;
+    const backgroundBlob = await res.blob();
+    const composedBlob = await composeSlideImage(backgroundBlob, slide.text);
+    files.push(
+      new File([composedBlob], `slide-${String(slide.index).padStart(2, "0")}.png`, {
+        type: "image/png",
+      }),
+    );
+  }
+
+  if (files.length === 0) {
+    throw new Error("Could not download this slideshow.");
+  }
+
+  if (typeof navigator !== "undefined" && navigator.canShare?.({ files })) {
+    try {
+      await navigator.share({ files, title: "Your slideshow" });
+      return;
+    } catch (error) {
+      // Backing out of the share sheet throws AbortError -- that's a
+      // completed, intentional "no thanks," not a failure to recover
+      // from by also firing off N separate downloads behind their back.
+      if (error instanceof Error && error.name === "AbortError") return;
+      // Any other share failure falls through to the plain-download path
+      // below instead of leaving the user with nothing.
+    }
+  }
+
+  // Fallback for browsers without file-sharing support (most desktop
+  // browsers): one plain download per image, still no archive step. A
+  // short pause between each keeps the browser from treating a burst of
+  // downloads as spam and blocking them; the delayed revoke avoids the
+  // same premature-cleanup race the old zip download had.
+  for (const file of files) {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
 }
 
 export function formatRelativeTime(iso: string): string {

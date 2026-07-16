@@ -115,8 +115,22 @@ export function SlideshowPhonePreview({ slides }: { slides: PreviewSlide[] }) {
           {active + 1} / {slides.length}
         </span>
 
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-void/80 via-void/20 to-transparent p-4 pt-14">
-          <p className="font-display text-base leading-tight font-bold text-white">{slide?.text}</p>
+        {/* Text lives in the upper "quiet zone" the image prompt was
+            written to leave clear (see slide-text-style.ts) instead of a
+            bottom gradient band over the subject — matches the reference
+            slideshow accounts this style was pulled from. The stroke is a
+            stacked text-shadow (not -webkit-text-stroke) so it renders
+            consistently across browsers regardless of what's behind it. */}
+        <div className="absolute inset-x-[8%] top-[9%]">
+          <p
+            className="font-display text-[17px] leading-[1.15] font-bold text-white"
+            style={{
+              textShadow:
+                "-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 2px 5px rgba(0,0,0,0.4)",
+            }}
+          >
+            {slide?.text}
+          </p>
         </div>
 
         <div className="absolute top-1/2 right-2.5 flex -translate-y-1/2 flex-col items-center gap-4">

@@ -7,7 +7,7 @@ import { type MouseEvent, useState } from "react";
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
-import { downloadPurchaseZip, formatRelativeTime, type PurchaseSummary } from "@/lib/purchases-client";
+import { formatRelativeTime, saveSlidesToDevice, type PurchaseSummary } from "@/lib/purchases-client";
 
 const STRIPES =
   "bg-[repeating-linear-gradient(135deg,var(--color-muted)_0px,var(--color-muted)_10px,transparent_10px,transparent_20px)]";
@@ -34,16 +34,16 @@ export function SlideshowCard({
   const hasAnyImage = purchase.slides.some((slide) => slide.imageUrl);
 
   // Stops the click from bubbling into the "View slideshow" link the button
-  // sits next to and grabs the zip right from the card -- same download
-  // used on the detail page and /generate/success, just without leaving
-  // /dashboard for it.
+  // sits next to and saves the slides right from the card -- same save
+  // flow used on the detail page and /generate/success, just without
+  // leaving /dashboard for it.
   async function handleDownload(event: MouseEvent) {
     event.preventDefault();
     event.stopPropagation();
     if (downloadState === "downloading") return;
     setDownloadState("downloading");
     try {
-      await downloadPurchaseZip(purchase.id);
+      await saveSlidesToDevice(purchase.id, purchase.slides);
       setDownloadState("idle");
     } catch (error) {
       console.error(error);
