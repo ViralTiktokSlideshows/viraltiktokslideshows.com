@@ -1,7 +1,7 @@
 "use client";
 
 import { Bookmark, ChevronLeft, ChevronRight, Heart, Share2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
@@ -19,6 +19,33 @@ export function SlideshowPhonePreview({ slides }: { slides: PreviewSlide[] }) {
   const [dragX, setDragX] = useState(0);
   const startX = useRef<number | null>(null);
   const dragging = useRef(false);
+
+  // Every image here is already a permanent R2 URL, so there's no reason
+  // to fetch each one on-demand as someone clicks/swipes to it. The <img>
+  // below just updates its `src` attribute on navigation -- browsers keep
+  // painting whatever the previously-loaded image was until the new,
+  // multi-MB full-res one finishes downloading, which on a slow connection
+  // reads as "stuck on slide 1, only 2 images ever show up" for several
+  // clicks in a row, then jumps once a fetch finally lands. Kicking off
+  // every slide's fetch as soon as the real URLs are known means most are
+  // already in the browser's cache well before someone reaches them.
+  const imageUrlsKey = useMemo(
+    () => slides.map((s) => s.imageUrl ?? "").join("|"),
+    [slides],
+  );
+  useEffect(() => {
+    const urls = imageUrlsKey.split("|").filter(Boolean);
+    const preloaded = urls.map((url) => {
+      const img = new window.Image();
+      img.src = url;
+      return img;
+    });
+    return () => {
+      // Drop the references so an in-flight fetch for a preview that's no
+      // longer on screen doesn't keep holding onto memory.
+      preloaded.length = 0;
+    };
+  }, [imageUrlsKey]);
 
   function goTo(index: number) {
     setActive(Math.max(0, Math.min(slides.length - 1, index)));
