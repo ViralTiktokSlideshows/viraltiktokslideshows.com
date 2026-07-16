@@ -110,8 +110,19 @@ export async function fetchSession(): Promise<SessionUser | null> {
 // starting checkout, the cached value could be minutes old (expired
 // session, signed out in another tab, etc.) even though the sidebar still
 // shows "signed in" from the last successful check.
+//
+// Deliberately does NOT flip the shared isPending flag to true while this
+// fetch is in flight (it used to, briefly, before landing the real value).
+// isPending is also what GenerateShell/DashboardShell branch their entire
+// layout on (the full AppFrame+sidebar tree vs. a signed-out fallback) --
+// flipping it mid-flow unmounted and remounted everything under it,
+// including whatever's calling getFreshUser() itself. In practice that was
+// RevealStep's "Try for $2" handler: the button's own isRedirecting state
+// (and its stable idempotencyKey) got wiped by the remount, so the loading
+// state visibly vanished and a second click started an entirely separate
+// checkout attempt -- while the *first* one kept running server-side, which
+// is exactly the double-purchase-attempt pattern seen on /dashboard.
 export async function getFreshUser(): Promise<SessionUser | null> {
-  setSessionState({ user: sessionState.user, isPending: true });
   const sessionUser = await fetchSession();
   setSessionState({ user: sessionUser, isPending: false });
   return sessionUser;
