@@ -1,4 +1,4 @@
-import type { SlideTextPosition } from "./slide-text-style";
+import type { SlideTextPosition, SlideTextStyle } from "./slide-text-style";
 
 export interface GeneratedSlide {
   index: number;
@@ -12,6 +12,9 @@ export interface GeneratedSlide {
   // Per-slide overlay-text placement, chosen by the model so each slide's
   // text lands where its background photo left room (see slide-text-style.ts).
   textPosition?: SlideTextPosition;
+  // Per-slide text look: boxed (white caption pills) or outlined (white
+  // text with a dark outline), assigned at random so a deck mixes both.
+  textStyle?: SlideTextStyle;
   // The described photo concept behind this slide (e.g. "stacks of cash on
   // marble counter"). Rides along from /api/generate so that when someone
   // unlocks, the server still has each slide's concept to generate its
