@@ -720,10 +720,22 @@ app.get("/api/checkout/status", async (c) => {
     }
   }
 
+  // Drives the post-download upgrade popup's copy on /generate/success: a
+  // second (or later) unlock attempt gets the "you're already paying twice,
+  // here's what a plan saves you" framing instead of the first-timer pitch.
+  // Any other Purchase row for this user counts -- PAID, PENDING, or
+  // otherwise -- since even an abandoned/failed attempt still means they
+  // came back to buy again.
+  const hasPriorPurchase =
+    (await prisma.purchase.count({
+      where: { userId: purchase.userId, id: { not: purchase.id } },
+    })) > 0;
+
   return c.json({
     status: purchase.status,
     idea: purchase.idea,
     slides: purchase.slides,
+    hasPriorPurchase,
   });
 });
 
