@@ -1,10 +1,6 @@
 import { generateSlideImages } from "./ideogram";
 import { generateSlideshowText, type SlideFormat } from "./openrouter";
-
-// Pexels wiring (stock-photos.ts) is built but deliberately not called
-// yet — paused to add cost logging first and see real Ideogram spend
-// numbers before changing the image pipeline. See fillRemainingSlideImages
-// below.
+import { generateStockSlideImages } from "./stock-photos";
 
 export type GeneratedSlide = { index: number; text: string; imageUrl?: string };
 
@@ -14,11 +10,15 @@ export type GeneratedSlideshow = {
   slides: GeneratedSlide[];
 };
 
-// Called from /api/generate — real slide text for the whole deck, but
-// only the hook slide gets a real image. This is the free-preview step
-// and most people who try it never pay, so we don't spend Ideogram
-// credits on slides 2-N until someone actually commits to unlocking (see
-// fillRemainingSlideImages, called from /api/checkout/create).
+// Called from /api/generate — real slide text for the whole deck, but only
+// the hook slide gets a real image. Most people who try the free preview
+// never pay, so this deliberately does NOT spend Ideogram credits here:
+// the hook image comes from free Pexels stock search instead, with
+// Ideogram only as a fallback if Pexels comes up empty for that slide (so
+// a preview still ships with some image rather than none, at the cost of
+// an occasional $0.03 on a non-converting visitor). The real Ideogram
+// spend all happens post-unlock, in fillRemainingSlideImages below, where
+// it's actually backed by revenue.
 export async function generateSlideshow(
   idea: string,
   format: SlideFormat = "STORYTIME",
@@ -32,7 +32,10 @@ export async function generateSlideshow(
     return { hook, slideCount: slides.length, slides };
   }
 
-  const hookImages = await generateSlideImages([hookSlide], "generateSlideshow:hook");
+  let hookImages = await generateStockSlideImages([hookSlide]);
+  if (!hookImages.has(hookSlide.index)) {
+    hookImages = await generateSlideImages([hookSlide], "generateSlideshow:hook-fallback");
+  }
   const hookImageUrl = hookImages.get(hookSlide.index);
 
   const enrichedSlides: GeneratedSlide[] = slides.map((slide) =>
@@ -46,6 +49,14 @@ export async function generateSlideshow(
 // fills in images for every slide that doesn't have one yet (everything
 // but the hook, normally). Slides that already have an image are left
 // untouched rather than re-generated.
+//
+// Stays on Ideogram, not Pexels: this only ever runs after a Purchase row
+// exists, which per index.ts's /api/checkout/create means either a $2
+// unlock or a covered generation on an active paid plan — never an
+// unconverted free preview. ~$0.18 of Ideogram spend (6 images) against
+// $2 of revenue, or against a plan subscription already being paid for,
+// is a real margin; spending the same on someone who hasn't committed to
+// anything (the free-preview path above) isn't.
 export async function fillRemainingSlideImages(
   slides: GeneratedSlide[],
 ): Promise<GeneratedSlide[]> {
