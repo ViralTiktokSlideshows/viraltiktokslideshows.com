@@ -50,7 +50,11 @@ export type GeneratedSlideshowText = {
 export type SlideFormat = "STORYTIME" | "LISTICLE" | "HOT_TAKE";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = "google/gemini-3.5-flash";
+// Claude Haiku 4.5: sharper, more "human" punchy copy for hooks than Gemini
+// Flash, at a lower price ($1/$5 per 1M vs Gemini 3.5 Flash's $1.50/$9) --
+// text is the cheap part of a generation either way (a fraction of one
+// Ideogram image), so this is a quality upgrade with no real margin cost.
+const MODEL = "anthropic/claude-haiku-4.5";
 
 type OpenRouterResponse = {
   choices?: { message?: { content?: string } }[];
@@ -137,7 +141,12 @@ async function attemptGenerate(
       },
       body: JSON.stringify({
         model: MODEL,
-        response_format: { type: "json_object" },
+        // No response_format: json_object. It's an OpenAI-ism that Anthropic
+        // models (Claude) don't natively support, and some OpenRouter
+        // providers 400 on it rather than ignoring it. We don't need it --
+        // the system prompt demands raw JSON and parseSlidesJson strips any
+        // ```json fences / preamble Claude tends to add, so parsing is
+        // robust without forcing the parameter.
         temperature: 0.9,
         messages: [
           { role: "system", content: systemPrompt },
