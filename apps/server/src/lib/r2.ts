@@ -2,12 +2,11 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 import { env } from "@viraltiktokslideshows/env/server";
 
-// Cloudflare R2 — S3-compatible object storage used to persist images we
-// generate. Right now that's just Ideogram slide images, whose returned
-// URLs are explicitly ephemeral (Ideogram's docs: "if you would like to
-// keep the image, you must download it"). Anything else the app generates
-// and needs to survive past the request that created it should land here
-// too — there's currently nothing else that qualifies.
+// Cloudflare R2 — S3-compatible object storage used to persist the slide
+// images we source (Ideogram AI images, Pexels stock photos), whose
+// original URLs are ephemeral (Ideogram) or third-party (Pexels). Every
+// image is copied here so the URL we store and serve is permanent and on
+// our own domain.
 //
 // R2 has no separate "region" concept; "auto" plus the account-scoped
 // endpoint is the documented way to point the AWS SDK at it.
@@ -20,15 +19,17 @@ const r2 = new S3Client({
   },
 });
 
-// Neither the source-image fetch nor the R2 upload had a timeout -- unlike
-// every other external call in this app (ideogram.ts's own 45s, openrouter.ts's
-// own timeout). A slow/hanging Ideogram image URL or a stuck R2 request
-// left generateSlideImages's Promise.allSettled waiting forever on that one
-// slide, which blocks the *entire* batch (allSettled only resolves once
-// every promise has), which blocks fillRemainingSlideImages, which blocks
-// POST /api/checkout/create -- with no error, just an unlock button that
-// spins indefinitely. Same 30s budget for both steps here.
 const REQUEST_TIMEOUT_MS = 30_000;
+
+// TikTok's native canvas is 1080x1920. Ideogram returns ~1440x2560 PNGs
+// (several MB) which are pointlessly large for that and murder preview load
+// on slow networks -- so paid Ideogram images are downscaled to fit 1080x1920
+// and re-encoded as JPEG before they're stored. Pexels images are requested
+// pre-sized/compressed from Pexels itself (see stock-photos.ts) and don't go
+// through this.
+const MAX_WIDTH = 1080;
+const MAX_HEIGHT = 1920;
+const JPEG_QUALITY = 78;
 
 export async function uploadToR2(
   bytes: Uint8Array,
@@ -60,10 +61,42 @@ export async function uploadToR2(
   return `${env.R2_PUBLIC_URL}/${key}`;
 }
 
+// Downscales to fit 1080x1920 and re-encodes as JPEG using sharp (libvips --
+// fast, threaded). Tuned for speed over maximum compression: the default
+// (non-mozjpeg) encoder and no EXIF-rotate step (Ideogram PNGs carry no
+// orientation metadata). sharp is loaded lazily and any failure -- including
+// sharp not being installed/loadable in this runtime -- is swallowed so the
+// original image is stored instead. That means the worst case is a larger
+// image, never a broken generation or a crash on a payment path (unlike a
+// top-level native import, which is exactly how @napi-rs/canvas took the
+// process down earlier).
+async function reencodeToJpeg(
+  bytes: Uint8Array,
+): Promise<{ bytes: Uint8Array; contentType: string } | null> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const out = await sharp(Buffer.from(bytes), { failOn: "none" })
+      .resize({ width: MAX_WIDTH, height: MAX_HEIGHT, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: JPEG_QUALITY })
+      .toBuffer();
+    return { bytes: new Uint8Array(out), contentType: "image/jpeg" };
+  } catch (err) {
+    console.error("[r2] image re-encode skipped (sharp unavailable or failed); storing original", err);
+    return null;
+  }
+}
+
 // Downloads an image from a (possibly ephemeral) source URL and re-uploads
-// it to R2, returning the permanent R2 URL. Used right after Ideogram
-// generates an image, so the ephemeral link is never the one we persist.
-export async function persistImageToR2(sourceUrl: string, key: string): Promise<string> {
+// it to R2, returning the permanent R2 URL. `keyBase` is the object key
+// WITHOUT an extension -- the extension is chosen from the final content
+// type so a re-encoded image lands as .jpg and a passthrough PNG as .png.
+// Pass { reencode: true } for large source images (Ideogram) that should be
+// shrunk to TikTok size; leave it off for already-small sources (Pexels).
+export async function persistImageToR2(
+  sourceUrl: string,
+  keyBase: string,
+  options: { reencode?: boolean } = {},
+): Promise<string> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -83,8 +116,25 @@ export async function persistImageToR2(sourceUrl: string, key: string): Promise<
     throw new Error(`Failed to fetch source image for R2 upload (${res.status})`);
   }
 
-  const contentType = res.headers.get("content-type") || "image/png";
-  const bytes = new Uint8Array(await res.arrayBuffer());
+  let contentType = res.headers.get("content-type") || "image/png";
+  let bytes = new Uint8Array(await res.arrayBuffer());
 
-  return uploadToR2(bytes, key, contentType);
+  if (options.reencode) {
+    const processed = await reencodeToJpeg(bytes);
+    if (processed) {
+      bytes = processed.bytes;
+      contentType = processed.contentType;
+    }
+  }
+
+  const ext =
+    contentType.includes("jpeg") || contentType.includes("jpg")
+      ? "jpg"
+      : contentType.includes("png")
+        ? "png"
+        : contentType.includes("webp")
+          ? "webp"
+          : "img";
+
+  return uploadToR2(bytes, `${keyBase}.${ext}`, contentType);
 }

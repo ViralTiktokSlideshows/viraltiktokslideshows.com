@@ -176,6 +176,11 @@ async function attemptGenerate(
     throw new Error("OpenRouter returned an unusable slide list");
   }
 
+  // One text look per slideshow (not per slide): real accounts keep a
+  // single caption style consistent across a whole deck, so pick boxed OR
+  // outlined once here and apply it to every slide.
+  const deckStyle = TEXT_STYLES[Math.floor(Math.random() * TEXT_STYLES.length)];
+
   const slides: GeneratedSlideText[] = rawSlides.map((slide, i) => ({
     index: i + 1,
     text: slide.text,
@@ -184,8 +189,7 @@ async function attemptGenerate(
     // response that omits textPosition still gets per-slide variety rather
     // than every slide defaulting to the same spot.
     textPosition: slide.textPosition ?? TEXT_POSITIONS[i % TEXT_POSITIONS.length],
-    // Random per slide so each deck mixes the boxed and outlined looks.
-    textStyle: TEXT_STYLES[Math.floor(Math.random() * TEXT_STYLES.length)],
+    textStyle: deckStyle,
   }));
 
   const hookText = slides[0]?.text;

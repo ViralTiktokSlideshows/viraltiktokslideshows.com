@@ -108,7 +108,17 @@ async function searchPexelsPhoto(query: string): Promise<string | null> {
 
   const data = (await res.json()) as PexelsSearchResponse;
   const photo = data.photos?.[0];
-  return photo?.src.large2x ?? photo?.src.portrait ?? photo?.src.large ?? photo?.src.original ?? null;
+  if (!photo) return null;
+
+  // Ask Pexels for a TikTok-sized, compressed JPEG directly (Imgix-style
+  // params on the original URL) instead of the multi-MB large2x. This keeps
+  // stock images small at the source -- no server-side re-encode needed on
+  // the Pexels path (free preview + $2 unlock), which is exactly the fast
+  // path we don't want to slow down.
+  if (photo.src.original) {
+    return `${photo.src.original}?auto=compress&cs=tinysrgb&fit=crop&w=1080&h=1920`;
+  }
+  return photo.src.portrait ?? photo.src.large ?? null;
 }
 
 type StockSlide = { index: number; text: string; visual?: string };
@@ -150,8 +160,9 @@ async function generateStockSlideImage(slide: StockSlide): Promise<string> {
 
   // Re-uploaded to R2 rather than hotlinked, same as Ideogram images —
   // keeps a permanent copy under our own domain regardless of what
-  // happens to the source photo or Pexels' own CDN later.
-  const key = `slides/${crypto.randomUUID()}.jpg`;
+  // happens to the source photo or Pexels' own CDN later. No reencode: the
+  // Pexels URL above is already a small, compressed JPEG.
+  const key = `slides/${crypto.randomUUID()}`;
   return persistImageToR2(photoUrl, key);
 }
 

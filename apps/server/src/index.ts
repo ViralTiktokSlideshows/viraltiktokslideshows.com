@@ -591,7 +591,10 @@ app.post("/api/checkout/create", async (c) => {
   // were text-only during the free preview.
   let enrichedSlides = slides;
   try {
-    enrichedSlides = await fillRemainingSlideImages(slides);
+    // Plan subscribers get Ideogram AI images; a $2 one-off unlock gets free
+    // Pexels stock photos (Ideogram only as a last-resort fallback). See
+    // fillRemainingSlideImages.
+    enrichedSlides = await fillRemainingSlideImages(slides, { plan: isPlanCovered });
   } catch (error) {
     console.error("Failed to fill remaining slide images, continuing with what we have", error);
   }

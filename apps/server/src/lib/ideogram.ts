@@ -104,7 +104,11 @@ function buildImagePrompt(slide: ImageSlide): string {
 // "generateSlideshow:hook" vs "fillRemainingSlideImages:bulk") — purely
 // for the cost logs below, so a spike in spend can be traced back to which
 // code path is generating the volume without guessing.
-export async function generateSlideImage(slide: ImageSlide, context = "unlabeled"): Promise<string> {
+export async function generateSlideImage(
+  slide: ImageSlide,
+  context = "unlabeled",
+  reencode = false,
+): Promise<string> {
   const start = Date.now();
 
   const form = new FormData();
@@ -165,11 +169,14 @@ export async function generateSlideImage(slide: ImageSlide, context = "unlabeled
   );
 
   // Ephemeral Ideogram URL -> permanent R2 URL, immediately, before it can
-  // expire. Key is unique per generation; no need to reuse/dedupe.
-  const key = `slides/${crypto.randomUUID()}.png`;
+  // expire. Key is unique per generation (extension is chosen by
+  // persistImageToR2 based on whether it re-encodes). `reencode` shrinks the
+  // large 2K PNG down to TikTok size + JPEG for paid images; the free
+  // preview hook passes false so that fast path stays untouched.
+  const key = `slides/${crypto.randomUUID()}`;
   let url: string;
   try {
-    url = await persistImageToR2(image.url, key);
+    url = await persistImageToR2(image.url, key, { reencode });
   } catch (err) {
     // The Ideogram spend above already happened and can't be undone -- this
     // is a paid-for image getting thrown away because our own storage step
@@ -199,6 +206,7 @@ export async function generateSlideImage(slide: ImageSlide, context = "unlabeled
 export async function generateSlideImages(
   slides: ImageSlide[],
   context = "unlabeled",
+  reencode = false,
 ): Promise<Map<number, string>> {
   const batchStart = Date.now();
   const billedCostBefore = processEstimatedCostUsd;
@@ -206,7 +214,7 @@ export async function generateSlideImages(
   const results = await Promise.allSettled(
     slides.map(async (slide) => ({
       index: slide.index,
-      url: await generateSlideImage(slide, context),
+      url: await generateSlideImage(slide, context, reencode),
     })),
   );
 

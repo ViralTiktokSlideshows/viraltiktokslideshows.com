@@ -147,7 +147,7 @@ export function SlideshowPhonePreview({ slides }: { slides: PreviewSlide[] }) {
           }}
         >
           {(slide?.textStyle ?? "boxed") === "boxed" ? (
-            <p className="font-display text-[15px] leading-[1.5] font-bold">
+            <p className="font-sans text-[15px] leading-[1.5] font-bold">
               <span
                 className="box-decoration-clone rounded-[5px] bg-white px-[0.3em] py-[0.06em] text-[#111]"
                 style={{ WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" }}
@@ -157,7 +157,7 @@ export function SlideshowPhonePreview({ slides }: { slides: PreviewSlide[] }) {
             </p>
           ) : (
             <p
-              className="font-display text-[16px] leading-[1.35] font-bold text-white"
+              className="font-sans text-[16px] leading-[1.35] font-bold text-white"
               style={{
                 textShadow:
                   "-1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000, 0 2px 5px rgba(0,0,0,0.5)",

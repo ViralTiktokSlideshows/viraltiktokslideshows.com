@@ -77,25 +77,45 @@ export async function generateSlideshow(
 // but the hook, normally). Slides that already have an image are left
 // untouched rather than re-generated.
 //
-// Stays on Ideogram, not Pexels: this only ever runs after a Purchase row
-// exists, which per index.ts's /api/checkout/create means either a $2
-// unlock or a covered generation on an active paid plan — never an
-// unconverted free preview. ~$0.18 of Ideogram spend (6 images) against
-// $2 of revenue, or against a plan subscription already being paid for,
-// is a real margin; spending the same on someone who hasn't committed to
-// anything (the free-preview path above) isn't.
+// Image source is split by who's paying:
+//   - Plan subscribers (options.plan === true): AI-generated Ideogram
+//     images -- the premium look reserved for an active subscription. These
+//     are re-encoded/downscaled to TikTok size before storage.
+//   - $2 one-off unlock (options.plan === false): free Pexels stock photos,
+//     so a single $2 sale never costs us Ideogram credits. Ideogram is used
+//     only as a fallback for the odd slide Pexels can't fill, so the paid
+//     slideshow still has an image on every slide.
 //
-// Each missing slide carries its own `visual` and `textPosition` from
-// OpenRouter, so every generated background is built for that specific
-// slide's concept and composition (see ideogram.ts's buildImagePrompt) --
-// not one generic look repeated across the deck.
+// Each missing slide carries its own `visual` from OpenRouter, so both
+// paths pick/generate a background built for that specific slide's concept
+// (see stock-photos.ts's search + ideogram.ts's buildImagePrompt).
 export async function fillRemainingSlideImages(
   slides: GeneratedSlide[],
+  options: { plan: boolean },
 ): Promise<GeneratedSlide[]> {
   const missing = slides.filter((slide) => !slide.imageUrl);
   if (missing.length === 0) return slides;
 
-  const images = await generateSlideImages(missing, "fillRemainingSlideImages:bulk");
+  const images = new Map<number, string>();
+
+  if (options.plan) {
+    const ai = await generateSlideImages(missing, "fillRemainingSlideImages:plan-ai", true);
+    for (const [index, url] of ai) images.set(index, url);
+  } else {
+    const stock = await generateStockSlideImages(missing);
+    for (const [index, url] of stock) images.set(index, url);
+
+    const stillMissing = missing.filter((slide) => !images.has(slide.index));
+    if (stillMissing.length > 0) {
+      const fallback = await generateSlideImages(
+        stillMissing,
+        "fillRemainingSlideImages:paid-fallback",
+        true,
+      );
+      for (const [index, url] of fallback) images.set(index, url);
+    }
+  }
+
   return slides.map((slide) =>
     images.has(slide.index) ? { ...slide, imageUrl: images.get(slide.index) } : slide,
   );

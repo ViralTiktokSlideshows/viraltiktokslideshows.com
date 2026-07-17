@@ -16,10 +16,13 @@ import {
 // one, @napi-rs/canvas, crashed on import in the sandbox and isn't worth
 // the risk on a payment path).
 
-function resolveDisplayFontFamily(): string {
+// Slideshow text uses Inter (readable, TikTok-caption-like), NOT the app's
+// Clash Display -- resolves the hashed family next/font assigned to
+// --font-inter so canvas text matches the preview.
+function resolveSlideFontFamily(): string {
   if (typeof document === "undefined") return "sans-serif";
   const value = getComputedStyle(document.documentElement)
-    .getPropertyValue("--font-clash-display")
+    .getPropertyValue("--font-inter")
     .trim();
   return value ? `${value}, sans-serif` : "sans-serif";
 }
@@ -107,7 +110,7 @@ export async function composeSlideImage(
 
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-  const fontFamily = resolveDisplayFontFamily();
+  const fontFamily = resolveSlideFontFamily();
   const fontSize = Math.round(canvas.width * SLIDE_TEXT_STYLE.fontSizeRatio);
   const lineHeight = fontSize * SLIDE_TEXT_STYLE.lineHeightRatio;
   const maxWidth = canvas.width * SLIDE_TEXT_STYLE.maxWidthRatio;
