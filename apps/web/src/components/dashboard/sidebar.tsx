@@ -27,8 +27,9 @@ import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 import { BrandMark } from "@/components/brand-mark";
 import { type PlanUsage, signOut, useSession } from "@/lib/auth-client";
 
+// No "Generate" entry -- the prominent "New slideshow" button above the nav
+// already goes to /generate, so a nav link to the same place was a duplicate.
 const NAV_ITEMS = [
-  { href: "/generate", label: "Generate", icon: Plus },
   { href: "/dashboard", label: "My slideshows", icon: LayoutGrid },
   { href: "/dashboard/saved", label: "Saved", icon: Bookmark },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
@@ -122,6 +123,7 @@ function SidebarContent({
   compact,
   usage,
   onNavigate,
+  hideLogo,
 }: {
   compact: boolean;
   // undefined = session/plan still loading (render nothing, matches the
@@ -130,6 +132,9 @@ function SidebarContent({
   // hidden); a real PlanUsage = active subscription progress bar.
   usage?: PlanUsage | null;
   onNavigate?: () => void;
+  // The mobile drawer renders its own logo in its header, so the one inside
+  // here is suppressed there to avoid showing it twice.
+  hideLogo?: boolean;
 }) {
   const pathname = usePathname();
   const { user, isPending } = useSession();
@@ -137,9 +142,11 @@ function SidebarContent({
 
   return (
     <div className="flex h-full flex-col gap-6 p-3">
-      <div className={cn("px-1 pt-1", compact && "px-0")}>
-        <Logo compact={compact} />
-      </div>
+      {!hideLogo ? (
+        <div className={cn("px-1 pt-1", compact && "px-0")}>
+          <Logo compact={compact} />
+        </div>
+      ) : null}
 
       {compact ? (
         <Button
@@ -301,7 +308,12 @@ export function Sidebar({
                 <X className="size-4" />
               </Button>
             </div>
-            <SidebarContent compact={false} usage={usage} onNavigate={() => setMobileOpen(false)} />
+            <SidebarContent
+              compact={false}
+              usage={usage}
+              onNavigate={() => setMobileOpen(false)}
+              hideLogo
+            />
           </div>
         </div>
       ) : null}
