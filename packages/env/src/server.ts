@@ -73,6 +73,19 @@ export const env = createEnv({
     // Cloudflare Turnstile secret key — server-side verification of the
     // token the client gets from the widget. See apps/server/src/lib/turnstile.ts.
     TURNSTILE_SECRET_KEY: z.string().min(1),
+
+    // TikHub (https://tikhub.io) — REST access to TikTok/social data, used
+    // for content research (e.g. analysing real viral slideshows), NOT the
+    // end-user product. See apps/server/src/lib/tikhub.ts. Optional: if unset,
+    // the /api/research/tikhub proxy returns 503 instead of the server failing
+    // to boot.
+    TIKHUB_API_KEY: z.string().min(1).optional(),
+
+    // Comma-separated list of account emails allowed to hit the admin-only
+    // research routes (the TikHub proxy). Anyone signed in with an email in
+    // this list can call it; everyone else gets 403. Optional, but the proxy
+    // denies ALL requests when it's empty (safe default).
+    ADMIN_EMAILS: z.string().optional(),
   },
   runtimeEnv: process.env,
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
