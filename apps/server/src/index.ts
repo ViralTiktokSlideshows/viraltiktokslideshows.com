@@ -5,6 +5,7 @@ import * as arctic from "arctic";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { Webhook } from "standardwebhooks";
 
 import {
@@ -29,7 +30,9 @@ import {
 import { isMagicLinkRateLimited, sendMagicLinkEmail, verifyMagicLinkToken } from "./lib/magic-link";
 import { getPlanUsage, planTierForProductId, productIdForPlanTier } from "./lib/plans";
 import { reconcilePendingPurchase, reconcilePendingPurchases } from "./lib/purchase-status";
+import { isAdminEmail } from "./lib/admin";
 import { getClientIp, isRateLimited } from "./lib/rate-limit";
+import { isTikHubConfigured, tikhubRequest } from "./lib/tikhub";
 import { verifyTurnstileToken } from "./lib/turnstile";
 import {
   clearSessionCookie,
@@ -253,6 +256,7 @@ app.get("/api/auth/session", async (c) => {
       name: user.name,
       image: user.image,
       hasCompletedOnboarding: user.hasCompletedOnboarding,
+      isAdmin: isAdminEmail(user.email),
       plan,
     },
   });
@@ -925,6 +929,58 @@ app.get("/api/purchases/:id/slides/:index/image", async (c) => {
   }
 
   return c.body(buffer, 200, headers);
+});
+
+// --- Admin-only TikHub research proxy ------------------------------------
+//
+// A malleable passthrough to TikHub's REST API (api.tikhub.io) for content
+// research (e.g. analysing real viral slideshows for a Reddit post), NOT part
+// of the end-user product. Whatever path you hit under /api/research/tikhub/
+// is forwarded verbatim to TikHub with the server's key attached, and its
+// raw JSON comes straight back -- so you can call ANY TikHub endpoint just by
+// changing the URL, no per-endpoint wiring:
+//
+//   curl --cookie "session=..." \
+//     "$SERVER/api/research/tikhub/api/v1/tiktok/web/fetch_search_video?keyword=slideshow&count=20"
+//
+// Gated to signed-in accounts whose email is in ADMIN_EMAILS (each call costs
+// TikHub credits). The cookie above is your normal logged-in session cookie.
+app.all("/api/research/tikhub/*", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+  if (!isAdminEmail(user.email)) {
+    return c.json({ error: "Not authorized" }, 403);
+  }
+  if (!isTikHubConfigured()) {
+    return c.json({ error: "TikHub is not configured (set TIKHUB_API_KEY)" }, 503);
+  }
+
+  // Everything after the prefix + the original query string is the TikHub
+  // endpoint to forward. Path params may contain slashes, so slice off the
+  // known prefix rather than relying on a single :param capture.
+  const url = new URL(c.req.url);
+  const prefix = "/api/research/tikhub/";
+  const endpoint = url.pathname.slice(url.pathname.indexOf(prefix) + prefix.length) + url.search;
+  if (!endpoint || endpoint.startsWith("?")) {
+    return c.json({ error: "Provide a TikHub endpoint path, e.g. api/v1/tiktok/web/fetch_search_video" }, 400);
+  }
+
+  const method = c.req.method;
+  const body = method === "GET" || method === "HEAD" ? undefined : await c.req.text();
+
+  try {
+    const result = await tikhubRequest(endpoint, { method, body: body || undefined });
+    // Pass TikHub's status + raw body straight through, so research sees
+    // exactly what the API returned.
+    return c.body(result.raw, result.status as ContentfulStatusCode, {
+      "Content-Type": "application/json",
+    });
+  } catch (error) {
+    console.error(`TikHub proxy failed for ${endpoint}`, error);
+    return c.json({ error: "TikHub request failed" }, 502);
+  }
 });
 
 // Dodo Payments webhook — confirms or fails a Purchase once the customer
