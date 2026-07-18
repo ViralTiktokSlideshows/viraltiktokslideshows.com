@@ -2,7 +2,10 @@
 
 import {
   ArrowUpRight,
+  Check,
   Code2,
+  Copy,
+  FlaskConical,
   Heart,
   Images,
   Loader2,
@@ -10,13 +13,13 @@ import {
   Play,
   Search,
   Share2,
+  Sparkles,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 import { Input } from "@viraltiktokslideshows/ui/components/input";
 import { Textarea } from "@viraltiktokslideshows/ui/components/textarea";
-import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
 import { useSession } from "@/lib/auth-client";
 import {
@@ -26,21 +29,7 @@ import {
   type TikTokPost,
 } from "@/lib/research-client";
 
-type ContentFilter = "all" | "slideshow" | "video";
-
-const SORT_OPTIONS = [
-  { value: 0, label: "Relevance" },
-  { value: 1, label: "Most liked" },
-] as const;
-
-const TIME_OPTIONS = [
-  { value: 0, label: "All time" },
-  { value: 1, label: "Past day" },
-  { value: 7, label: "Past week" },
-  { value: 30, label: "Past month" },
-  { value: 90, label: "Past 3 months" },
-  { value: 180, label: "Past 6 months" },
-] as const;
+const EXAMPLE_TERMS = ["motivation", "gym tips", "book quotes", "glow up", "study tips", "money"];
 
 function StatChip({ icon: Icon, value }: { icon: typeof Play; value: number }) {
   return (
@@ -53,7 +42,7 @@ function StatChip({ icon: Icon, value }: { icon: typeof Play; value: number }) {
 
 function PostCard({ post }: { post: TikTokPost }) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card">
+    <div className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-lg">
       <div className="relative aspect-[9/16] w-full overflow-hidden bg-muted">
         {post.cover ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -61,7 +50,7 @@ function PostCard({ post }: { post: TikTokPost }) {
             src={post.cover}
             alt=""
             referrerPolicy="no-referrer"
-            className="size-full object-cover"
+            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.visibility = "hidden";
             }}
@@ -71,21 +60,19 @@ function PostCard({ post }: { post: TikTokPost }) {
             <Images className="size-8" />
           </div>
         )}
-        {post.isSlideshow ? (
-          <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-void/80 px-2 py-1 text-[11px] font-semibold text-bone">
-            <Images className="size-3" />
-            {post.imageCount} slides
-          </span>
-        ) : null}
+        <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-void/85 px-2 py-1 text-[11px] font-semibold text-spark backdrop-blur-sm">
+          <Images className="size-3" />
+          {post.imageCount}
+        </span>
       </div>
 
       <div className="flex flex-1 flex-col gap-2 p-3">
-        <p className="line-clamp-3 text-sm text-foreground">{post.caption || "—"}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="line-clamp-2 text-sm leading-snug text-foreground">{post.caption || "—"}</p>
+        <p className="truncate text-xs text-muted-foreground">
           {post.authorName}
           {post.authorHandle ? ` · @${post.authorHandle}` : ""}
         </p>
-        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 pt-1">
+        <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border pt-2">
           <StatChip icon={Play} value={post.playCount} />
           <StatChip icon={Heart} value={post.likeCount} />
           <StatChip icon={MessageCircle} value={post.commentCount} />
@@ -95,11 +82,36 @@ function PostCard({ post }: { post: TikTokPost }) {
           href={post.url}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
         >
           Open on TikTok
           <ArrowUpRight className="size-3.5" />
         </a>
+      </div>
+    </div>
+  );
+}
+
+// Build-in-progress state, matching the generate flow's animated-card loader.
+function SearchingState() {
+  return (
+    <div className="animate-in fade-in-0 mt-10 flex flex-col items-center py-10 text-center duration-500 ease-out">
+      <div className="relative h-36 w-28">
+        <div className="absolute inset-2 rounded-2xl bg-border" />
+        <div className="absolute inset-0 animate-pulse rounded-2xl border border-border bg-gradient-to-br from-spark/40 via-spark/15 to-transparent shadow-lg" />
+        <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1.5">
+          <div className="h-2 w-3/4 rounded-2xl bg-spark/50" />
+          <div className="h-2 w-1/2 rounded-2xl bg-spark/35" />
+        </div>
+      </div>
+      <h2 className="mt-6 font-display text-xl font-bold text-foreground sm:text-2xl">
+        Scanning TikTok for slideshows&hellip;
+      </h2>
+      <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+        Pulling photo-mode posts and filtering out the videos.
+      </p>
+      <div className="mt-5 h-1.5 w-full max-w-xs overflow-hidden rounded-2xl bg-border">
+        <div className="h-full w-1/2 animate-pulse rounded-2xl bg-spark" />
       </div>
     </div>
   );
@@ -111,39 +123,28 @@ export default function ResearchPage() {
   // --- structured search state ---
   const [keyword, setKeyword] = useState("");
   const [count, setCount] = useState(20);
-  const [sortType, setSortType] = useState(0);
-  const [publishTime, setPublishTime] = useState(0);
-  const [filter, setFilter] = useState<ContentFilter>("all");
   const [posts, setPosts] = useState<TikTokPost[]>([]);
   const [searchState, setSearchState] = useState<"idle" | "loading" | "error">("idle");
   const [searchError, setSearchError] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
   const [lastRaw, setLastRaw] = useState<unknown>(null);
+  const [copied, setCopied] = useState(false);
 
   // --- raw request console state ---
   const [showRaw, setShowRaw] = useState(false);
-  const [rawEndpoint, setRawEndpoint] = useState("api/v1/tiktok/web/fetch_search_video");
-  const [rawParams, setRawParams] = useState('{\n  "keyword": "slideshow",\n  "count": 10\n}');
+  const [rawEndpoint, setRawEndpoint] = useState("api/v1/tiktok/web/fetch_general_search");
+  const [rawParams, setRawParams] = useState('{\n  "keyword": "slideshow",\n  "offset": 0\n}');
   const [rawState, setRawState] = useState<"idle" | "loading">("idle");
   const [rawOutput, setRawOutput] = useState("");
 
-  const filtered = useMemo(() => {
-    if (filter === "slideshow") return posts.filter((p) => p.isSlideshow);
-    if (filter === "video") return posts.filter((p) => !p.isSlideshow);
-    return posts;
-  }, [posts, filter]);
-
-  async function handleSearch(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!keyword.trim() || searchState === "loading") return;
+  async function runSearch(term: string) {
+    const q = term.trim();
+    if (!q || searchState === "loading") return;
+    setHasSearched(true);
     setSearchState("loading");
     setSearchError("");
     try {
-      const { result, posts: found } = await searchTikTok({
-        keyword: keyword.trim(),
-        count,
-        sortType,
-        publishTime,
-      });
+      const { result, posts: found } = await searchTikTok({ keyword: q, limit: count });
       setLastRaw(result.data);
       if (!result.ok) {
         setSearchState("error");
@@ -154,13 +155,38 @@ export default function ResearchPage() {
       setPosts(found);
       setSearchState("idle");
       if (found.length === 0) {
-        setSearchError("No posts parsed from the response — try the raw console to inspect it.");
+        setSearchError("No slideshows found for that term — try a broader keyword.");
       }
     } catch {
       setSearchState("error");
       setSearchError("Request failed. Are you signed in as an admin and is TIKHUB_API_KEY set?");
       setPosts([]);
     }
+  }
+
+  function handleExample(term: string) {
+    setKeyword(term);
+    runSearch(term);
+  }
+
+  // Copies every result as a tab-separated table (paste into a sheet or hand
+  // to an assistant to analyze) — one row per slideshow, no manual transcribing.
+  function copyData() {
+    const header = ["slides", "views", "likes", "comments", "shares", "caption"].join("\t");
+    const rows = posts.map((p) =>
+      [
+        p.imageCount,
+        p.playCount,
+        p.likeCount,
+        p.commentCount,
+        p.shareCount,
+        (p.caption || "").replace(/\s+/g, " ").trim(),
+      ].join("\t"),
+    );
+    navigator.clipboard.writeText([header, ...rows].join("\n")).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
   }
 
   async function handleRaw(e?: React.FormEvent) {
@@ -177,9 +203,7 @@ export default function ResearchPage() {
     }
     try {
       const result = await tikhubProxy(rawEndpoint.trim(), params);
-      setRawOutput(
-        `// status ${result.status}\n${JSON.stringify(result.data, null, 2)}`,
-      );
+      setRawOutput(`// status ${result.status}\n${JSON.stringify(result.data, null, 2)}`);
     } catch {
       setRawOutput("Request failed.");
     }
@@ -203,26 +227,39 @@ export default function ResearchPage() {
     );
   }
 
+  const showResults = searchState !== "loading" && posts.length > 0;
+  const showEmptyResult = searchState !== "loading" && hasSearched && posts.length === 0;
+  const showInitial = !hasSearched && searchState !== "loading";
+
   return (
     <div className="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6 lg:p-8">
-      <div className="mb-6">
-        <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
-          Admin · TikHub
+      {/* Header */}
+      <div className="mb-6 flex items-start gap-4">
+        <span className="hidden size-12 shrink-0 items-center justify-center rounded-2xl bg-void text-spark sm:flex">
+          <FlaskConical className="size-6" />
         </span>
-        <h1 className="mt-1 font-display text-2xl font-bold text-foreground sm:text-3xl">
-          TikTok research
-        </h1>
-        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Search TikTok for any terms and filter by post type. Slideshows (photo-mode carousels)
-          are tagged with their slide count. Every call runs through your server with your TikHub
-          key — nothing is exposed to the browser.
-        </p>
+        <div>
+          <span className="text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+            Admin · TikHub
+          </span>
+          <h1 className="mt-1 font-display text-2xl font-bold text-foreground sm:text-3xl">
+            TikTok slideshow research
+          </h1>
+          <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
+            Pull real, viral slideshows by keyword to study what&apos;s working. Videos are filtered
+            out — only photo-mode posts come back, tagged with their slide count. Every call runs
+            through your server, so your TikHub key never touches the browser.
+          </p>
+        </div>
       </div>
 
       {/* Search form */}
       <form
-        onSubmit={handleSearch}
-        className="rounded-2xl border border-border bg-card p-4 sm:p-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          runSearch(keyword);
+        }}
+        className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5"
       >
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
@@ -230,11 +267,16 @@ export default function ResearchPage() {
             <Input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
-              placeholder="e.g. motivation slideshow, gym tips, book quotes…"
+              placeholder="Search any topic — motivation, gym tips, book quotes…"
               className="pl-9"
             />
           </div>
-          <Button type="submit" size="lg" disabled={searchState === "loading" || !keyword.trim()}>
+          <Button
+            type="submit"
+            size="lg"
+            className="gap-2"
+            disabled={searchState === "loading" || !keyword.trim()}
+          >
             {searchState === "loading" ? (
               <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
             ) : (
@@ -244,37 +286,9 @@ export default function ResearchPage() {
           </Button>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
           <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            Sort
-            <select
-              value={sortType}
-              onChange={(e) => setSortType(Number(e.target.value))}
-              className="rounded-xl border border-border bg-background px-2 py-1 text-xs text-foreground"
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            Time
-            <select
-              value={publishTime}
-              onChange={(e) => setPublishTime(Number(e.target.value))}
-              className="rounded-xl border border-border bg-background px-2 py-1 text-xs text-foreground"
-            >
-              {TIME_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            Count
+            Show up to
             <Input
               type="number"
               min={1}
@@ -283,65 +297,124 @@ export default function ResearchPage() {
               onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 20)))}
               className="h-8 w-16 px-2 text-xs"
             />
+            slideshows
           </label>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Try:</span>
+            {EXAMPLE_TERMS.map((term) => (
+              <button
+                key={term}
+                type="button"
+                onClick={() => handleExample(term)}
+                disabled={searchState === "loading"}
+                className="rounded-full border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-muted hover:text-foreground disabled:opacity-50"
+              >
+                {term}
+              </button>
+            ))}
+          </div>
         </div>
       </form>
 
-      {/* Content-type filter */}
-      {posts.length > 0 ? (
-        <div className="mt-5 flex items-center gap-2">
-          {(
-            [
-              { value: "all", label: `All (${posts.length})` },
-              {
-                value: "slideshow",
-                label: `Slideshows (${posts.filter((p) => p.isSlideshow).length})`,
-              },
-              { value: "video", label: `Videos (${posts.filter((p) => !p.isSlideshow).length})` },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.value}
+      {/* Loading */}
+      {searchState === "loading" ? <SearchingState /> : null}
+
+      {/* Results */}
+      {showResults ? (
+        <>
+          <div className="mt-6 flex items-center gap-2">
+            <span className="flex items-center gap-2 text-xs font-semibold tracking-widest text-muted-foreground uppercase">
+              <Sparkles className="size-3.5 text-spark" />
+              {posts.length} slideshow{posts.length === 1 ? "" : "s"}
+            </span>
+            <Button
               type="button"
-              onClick={() => setFilter(tab.value)}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                filter === tab.value
-                  ? "bg-primary/15 text-foreground"
-                  : "text-muted-foreground hover:bg-muted",
-              )}
+              size="sm"
+              variant="outline"
+              className="ml-auto gap-1.5"
+              onClick={copyData}
             >
-              {tab.label}
+              {copied ? (
+                <>
+                  <Check className="size-3.5" data-icon="inline-start" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="size-3.5" data-icon="inline-start" />
+                  Copy data
+                </>
+              )}
+            </Button>
+          </div>
+          <div className="animate-in fade-in-0 mt-3 grid grid-cols-2 gap-4 duration-500 sm:grid-cols-3 lg:grid-cols-4">
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* Searched, nothing to show */}
+      {showEmptyResult ? (
+        <div className="mt-8 flex flex-col items-center rounded-2xl border border-dashed border-border py-14 text-center">
+          <span className="flex size-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+            <Search className="size-6" />
+          </span>
+          <p className="mt-4 max-w-sm text-sm text-muted-foreground">
+            {searchError || "No slideshows found. Try a broader keyword."}
+          </p>
+          {lastRaw !== null ? (
+            <button
+              type="button"
+              onClick={() => setShowRaw(true)}
+              className="mt-2 text-xs font-medium text-primary hover:underline"
+            >
+              Inspect the raw response
             </button>
-          ))}
+          ) : null}
         </div>
       ) : null}
 
-      {searchError ? (
-        <p className="mt-4 text-sm text-muted-foreground">{searchError}</p>
-      ) : null}
-
-      {/* Results */}
-      {filtered.length > 0 ? (
-        <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {filtered.map((post) => (
-            <PostCard key={post.id} post={post} />
-          ))}
+      {/* First-run empty state */}
+      {showInitial ? (
+        <div className="mt-8 flex flex-col items-center rounded-2xl border border-dashed border-border bg-muted/30 py-16 text-center">
+          <span className="flex size-14 items-center justify-center rounded-2xl bg-void text-spark">
+            <Sparkles className="size-7" />
+          </span>
+          <h2 className="mt-5 font-display text-xl font-bold text-foreground">
+            Study what&apos;s already going viral
+          </h2>
+          <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+            Search a topic to pull real TikTok slideshows with their view, like, and save counts —
+            the raw material for a “I analyzed 100 slideshows” post.
+          </p>
+          <div className="mt-5 flex flex-wrap justify-center gap-1.5">
+            {EXAMPLE_TERMS.slice(0, 4).map((term) => (
+              <button
+                key={term}
+                type="button"
+                onClick={() => handleExample(term)}
+                className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-muted"
+              >
+                {term}
+              </button>
+            ))}
+          </div>
         </div>
       ) : null}
 
       {/* Raw request console */}
-      <div className="mt-8 rounded-2xl border border-border bg-card">
+      <div className="mt-8 overflow-hidden rounded-2xl border border-border bg-card">
         <button
           type="button"
           onClick={() => setShowRaw((s) => !s)}
-          className="flex w-full items-center gap-2 p-4 text-left text-sm font-medium text-foreground"
+          className="flex w-full items-center gap-2 p-4 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted/40"
         >
           <Code2 className="size-4 text-muted-foreground" />
           Raw request console
-          <span className="ml-auto text-xs text-muted-foreground">
-            {showRaw ? "Hide" : "Show"}
-          </span>
+          <span className="ml-auto text-xs text-muted-foreground">{showRaw ? "Hide" : "Show"}</span>
         </button>
         {showRaw ? (
           <form onSubmit={handleRaw} className="border-t border-border p-4">
@@ -354,7 +427,7 @@ export default function ResearchPage() {
             <Input
               value={rawEndpoint}
               onChange={(e) => setRawEndpoint(e.target.value)}
-              placeholder="api/v1/tiktok/web/fetch_search_video"
+              placeholder="api/v1/tiktok/web/fetch_general_search"
               className="font-mono text-xs"
             />
             <label className="mt-3 mb-1 block text-xs font-medium text-muted-foreground">
@@ -366,7 +439,7 @@ export default function ResearchPage() {
               rows={5}
               className="font-mono text-xs"
             />
-            <Button type="submit" size="sm" className="mt-3" disabled={rawState === "loading"}>
+            <Button type="submit" size="sm" className="mt-3 gap-2" disabled={rawState === "loading"}>
               {rawState === "loading" ? (
                 <Loader2 className="size-4 animate-spin" data-icon="inline-start" />
               ) : null}
@@ -380,14 +453,6 @@ export default function ResearchPage() {
           </form>
         ) : null}
       </div>
-
-      {/* Peek at the parsed response even when no cards rendered */}
-      {lastRaw !== null && posts.length === 0 && !showRaw ? (
-        <p className="mt-4 text-xs text-muted-foreground">
-          A response came back but no posts were parsed. Open the raw console and re-run to inspect
-          the exact shape.
-        </p>
-      ) : null}
     </div>
   );
 }
