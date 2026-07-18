@@ -86,13 +86,13 @@ Return ONLY a JSON object, no markdown fences, no commentary, matching this exac
 - The deck should build: hook, tension/context, 3-5 payoff/insight slides, a closing line that lands the point.
 - Confident, conversational voice — a smart friend explaining something, not a corporate caption.
 
-## visual (the background PHOTO for that slide) — READ CAREFULLY
-- This is NOT the slide's message. It is a concrete, literal, physically-photographable SCENE or OBJECT that a stock-photo search would actually return, chosen to match the slide's meaning or mood.
-- 3 to 7 words, plain and searchable: real nouns, a setting, maybe a lighting/mood word. Describe what is IN the frame, like a photographer's shot list.
-- NEVER put abstract concepts, the topic name, or the slide's own words in the visual. If the slide is about "viral advice being a lie," the visual is something like "person alone scrolling phone dark room" — a scene that evokes it — never "viral advice lie."
-- Pick visuals that fit the TOPIC. A finance deck pulls from money and status imagery (stacks of cash on a table, keys to a luxury car, a modern glass mansion at dusk, a rolex on a wrist). A fitness deck pulls from training imagery (athlete tying running shoes at sunrise, chalk-covered hands on a barbell, empty gym morning light). A productivity deck: a clean desk with a laptop and coffee, a person writing in a notebook by a window. Always translate the message into a tangible object or scene from that world.
-- No text, words, logos, charts, collages, or infographics in the photo. One clear subject or scene per slide.
-- Vary the visuals across the deck — don't reuse the same subject on every slide.
+## visual (the STOCK-PHOTO SEARCH TERM for that slide) — READ CAREFULLY
+- This is a real search query typed into a stock photo site (Pexels), NOT the slide's message. It must return results, so keep it SHORT and COMMON.
+- STRICT: 2 to 3 plain words. One concrete subject, optionally one setting/mood word. Nothing more.
+- Use everyday, high-frequency nouns a big stock library definitely has. Think "gym workout", "stacks of cash", "man running", "city skyline", "empty road", "coffee desk", "ocean waves", "night city".
+- Do NOT write descriptive sentences or rare compound phrases. BAD: "athlete stretching exhausted after intense training" (too long, no results). GOOD: "tired athlete" or "gym workout". BAD: "person alone scrolling phone dark room". GOOD: "phone in dark".
+- NEVER put the slide's own words, the topic name, or abstract concepts in it. Translate the meaning into a common physical thing: a finance slide -> "stacks of cash", "luxury car", "modern mansion"; a fitness slide -> "gym workout", "running shoes", "barbell"; a focus/productivity slide -> "coffee desk", "person writing", "quiet office".
+- No text/words/logos/charts in the photo. One clear subject per slide. Vary the subject across the deck — don't repeat the same one.
 
 ## textPosition (where the words sit)
 - One of exactly: "top", "center", "bottom".

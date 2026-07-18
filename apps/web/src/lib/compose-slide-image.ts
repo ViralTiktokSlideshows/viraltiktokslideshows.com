@@ -12,13 +12,8 @@ import {
 // resolution, in the same two TikTok treatments the live preview uses
 // (see slide-text-style.ts): "boxed" = black text in per-line white pills,
 // "outlined" = white text with a dark outline. Runs entirely in the
-// browser's Canvas 2D API -- no server-side/native image library (a native
-// one, @napi-rs/canvas, crashed on import in the sandbox and isn't worth
-// the risk on a payment path).
+// browser's Canvas 2D API -- no server-side/native image library.
 
-// Slideshow text uses Inter (readable, TikTok-caption-like), NOT the app's
-// Clash Display -- resolves the hashed family next/font assigned to
-// --font-inter so canvas text matches the preview.
 function resolveSlideFontFamily(): string {
   if (typeof document === "undefined") return "sans-serif";
   const value = getComputedStyle(document.documentElement)
@@ -65,26 +60,39 @@ function roundRectPath(
 const IMAGE_LOAD_TIMEOUT_MS = 15_000;
 const FONTS_READY_TIMEOUT_MS = 5_000;
 
-function loadImage(blob: Blob): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
+type DecodedImage = { source: CanvasImageSource; width: number; height: number };
+
+// Decodes an image blob into something canvas can draw. Prefers
+// createImageBitmap: it decodes the blob directly and resolves/rejects a
+// real promise, unlike `new Image()` + onload -- whose load event was
+// observed to NEVER fire for some blobs in the field, hanging the whole
+// download until the 15s timeout and forcing a text-less fallback. Falls
+// back to the <img> approach only where createImageBitmap is unavailable.
+async function decodeImage(blob: Blob): Promise<DecodedImage> {
+  if (typeof createImageBitmap === "function") {
+    const bitmap = await createImageBitmap(blob);
+    return { source: bitmap, width: bitmap.width, height: bitmap.height };
+  }
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const objectUrl = URL.createObjectURL(blob);
-    const img = new window.Image();
+    const el = new window.Image();
     const timeout = setTimeout(() => {
       URL.revokeObjectURL(objectUrl);
       reject(new Error("Timed out decoding this slide's image"));
     }, IMAGE_LOAD_TIMEOUT_MS);
-    img.onload = () => {
+    el.onload = () => {
       clearTimeout(timeout);
       URL.revokeObjectURL(objectUrl);
-      resolve(img);
+      resolve(el);
     };
-    img.onerror = () => {
+    el.onerror = () => {
       clearTimeout(timeout);
       URL.revokeObjectURL(objectUrl);
       reject(new Error("Could not decode this slide's image"));
     };
-    img.src = objectUrl;
+    el.src = objectUrl;
   });
+  return { source: img, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height };
 }
 
 export async function composeSlideImage(
@@ -93,8 +101,12 @@ export async function composeSlideImage(
   textPosition: SlideTextPosition = "top",
   textStyle: SlideTextStyle = "boxed",
 ): Promise<Blob> {
-  const img = await loadImage(backgroundBlob);
+  const decoded = await decodeImage(backgroundBlob);
 
+  // Canvas text needs the font already loaded to measure/draw correctly.
+  // document.fonts.ready has been known to never resolve in some webviews,
+  // so it's raced against a short timeout -- worst case the text draws in a
+  // fallback sans-serif instead of hanging.
   if (typeof document !== "undefined" && document.fonts?.ready) {
     await Promise.race([
       document.fonts.ready,
@@ -103,12 +115,15 @@ export async function composeSlideImage(
   }
 
   const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth || img.width;
-  canvas.height = img.naturalHeight || img.height;
+  canvas.width = decoded.width;
+  canvas.height = decoded.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas isn't supported in this browser");
 
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  ctx.drawImage(decoded.source, 0, 0, canvas.width, canvas.height);
+  if ("close" in decoded.source && typeof decoded.source.close === "function") {
+    decoded.source.close();
+  }
 
   const fontFamily = resolveSlideFontFamily();
   const fontSize = Math.round(canvas.width * SLIDE_TEXT_STYLE.fontSizeRatio);
@@ -120,7 +135,6 @@ export async function composeSlideImage(
   ctx.textBaseline = "middle";
 
   const lines = wrapLines(ctx, text, maxWidth);
-  // Small hand-placed drift so the text isn't dead-centered and edge-locked.
   const jitter = naturalJitter(text);
   const centerX = canvas.width / 2 + jitter.xRatio * canvas.width;
   const jitterY = jitter.yRatio * canvas.height;
@@ -139,11 +153,9 @@ export async function composeSlideImage(
       const pillWidth = textWidth + padX * 2;
       const pillY = top + i * (pillHeight + gap);
       const pillX = centerX - pillWidth / 2;
-      // White pill.
       roundRectPath(ctx, pillX, pillY, pillWidth, pillHeight, radius);
       ctx.fillStyle = "#ffffff";
       ctx.fill();
-      // Black text centered in the pill.
       ctx.fillStyle = "#111111";
       ctx.fillText(line, centerX, pillY + pillHeight / 2);
     });
@@ -156,7 +168,6 @@ export async function composeSlideImage(
     ctx.miterLimit = 2;
     lines.forEach((line, i) => {
       const y = top + i * lineHeight + lineHeight / 2;
-      // Soft shadow underneath for depth on light backgrounds.
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,0.45)";
       ctx.shadowBlur = fontSize * 0.12;
