@@ -69,7 +69,7 @@ export function Pricing() {
               <h3 className="font-semibold text-bone">Single unlock</h3>
               <p className="mt-1 font-mono text-3xl font-bold text-spark">$2</p>
               <p className="mt-3 max-w-xs text-sm text-bone/60">
-                Unlock this slideshow. All slides, full quality, no watermark. Yours forever.
+                Unlock this slideshow. All slides, full quality. Yours forever.
               </p>
             </div>
             <Button

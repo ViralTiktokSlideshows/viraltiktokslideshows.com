@@ -14,7 +14,7 @@ const SECTIONS = [
   },
   {
     title: "2. What the Service does",
-    body: `You type an idea. We use third-party AI models to generate a short slide-deck script and background images from it. The hook slide is shown to you for free. Unlocking the full slideshow — every slide, every image, no watermark, downloadable — is a one-time $2 payment per slideshow.`,
+    body: `You type an idea. We use third-party AI models to generate a short slide-deck script and background images from it. The hook slide is shown to you for free. Unlocking the full slideshow — every slide, every image, downloadable — is a one-time $2 payment per slideshow.`,
   },
   {
     title: "3. Accounts",

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.735.0",
+    "@napi-rs/canvas": "^0.1.65",
     "@viraltiktokslideshows/db": "workspace:*",
     "@viraltiktokslideshows/env": "workspace:*",
     "arctic": "^3.7.0",

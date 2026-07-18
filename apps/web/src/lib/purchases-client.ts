@@ -8,7 +8,6 @@ import type {
 } from "@/components/generate/slide-text-style";
 
 import { authedFetch } from "./api-fetch";
-import { composeSlideImage } from "./compose-slide-image";
 
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
 
@@ -71,30 +70,18 @@ export async function fetchPurchase(id: string): Promise<PurchaseSummary | null>
   return { id, idea: data.idea ?? "", slides: data.slides ?? [], status: data.status, createdAt: "" };
 }
 
-const SLIDE_FETCH_TIMEOUT_MS = 20_000;
-
 function slideImageUrl(purchaseId: string, index: number, download = false): string {
   const base = `${SERVER_URL}/api/purchases/${purchaseId}/slides/${index}/image`;
   return download ? `${base}?download=1` : base;
 }
 
-async function fetchSlideImageBlob(purchaseId: string, index: number): Promise<Blob> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SLIDE_FETCH_TIMEOUT_MS);
-  try {
-    const res = await authedFetch(slideImageUrl(purchaseId, index), { signal: controller.signal });
-    if (!res.ok) throw new Error(`Slide ${index} image request failed (${res.status})`);
-    return await res.blob();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-// Triggers a browser download from a URL/blob via a temporary anchor. This
-// is the reliable, can't-stall primitive: no Web Share (which hangs on
-// desktop), no promise to await on. Same-origin blob URLs honor the
-// download filename; the cross-origin server URL relies on the endpoint's
-// Content-Disposition: attachment header (see ?download=1) instead.
+// Triggers a browser download via a temporary anchor pointed straight at the
+// server's ?download=1 endpoint. This is the reliable, can't-stall primitive:
+// no client fetch, no Canvas, no blob, no Web Share (which hangs on desktop),
+// no promise to await. The server bakes the slide TEXT onto the image and
+// sends it with Content-Disposition: attachment (see the slides image route
+// in apps/server/src/index.ts + lib/compose-slide.ts), so the browser saves a
+// finished, captioned slide with zero client-side steps that can fail.
 function triggerDownload(href: string, filename: string): void {
   const link = document.createElement("a");
   link.href = href;
@@ -104,49 +91,19 @@ function triggerDownload(href: string, filename: string): void {
   link.remove();
 }
 
-// Saves every slide image to the device. For each slide it tries to bake
-// the styled text onto the background (see compose-slide-image.ts) and
-// download that; if fetching or compositing that slide fails, it falls back
-// to downloading the raw image straight from the server (Content-Disposition
-// attachment), so a slide is never silently dropped. Processed one at a
-// time with a small gap so the browser doesn't block the burst, and every
-// step is timeout-guarded -- there is no Web Share and no unbounded await,
-// so the download can't stall the way the old pipeline did.
+// Saves every slide image to the device. Text is baked in server-side, so
+// this just points an anchor at each slide's ?download=1 URL, one at a time
+// with a small gap so the browser doesn't block the burst of downloads.
 export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]): Promise<void> {
   const withImages = slides.filter((slide) => slide.imageUrl);
   if (withImages.length === 0) {
     throw new Error("No images are available for this slideshow yet.");
   }
 
-  let savedAny = false;
   for (const slide of withImages) {
-    const filename = `slide-${String(slide.index).padStart(2, "0")}.png`;
-    try {
-      const backgroundBlob = await fetchSlideImageBlob(purchaseId, slide.index);
-      const composed = await composeSlideImage(
-        backgroundBlob,
-        slide.text,
-        slide.textPosition ?? "top",
-        slide.textStyle ?? "boxed",
-      );
-      const url = URL.createObjectURL(composed);
-      triggerDownload(url, filename);
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      savedAny = true;
-    } catch (error) {
-      // Fetch or compositing failed for this slide -- fall back to the raw
-      // server download so the user still gets the image (without baked
-      // text). This uses the same endpoint with Content-Disposition, so the
-      // browser saves it directly with no client-side steps to fail.
-      console.error(`Compositing slide ${slide.index} failed; downloading the raw image`, error);
-      triggerDownload(slideImageUrl(purchaseId, slide.index, true), filename);
-      savedAny = true;
-    }
+    const filename = `slide-${String(slide.index).padStart(2, "0")}.jpg`;
+    triggerDownload(slideImageUrl(purchaseId, slide.index, true), filename);
     await new Promise((resolve) => setTimeout(resolve, 450));
-  }
-
-  if (!savedAny) {
-    throw new Error("Could not download this slideshow. Please try again.");
   }
 }
 

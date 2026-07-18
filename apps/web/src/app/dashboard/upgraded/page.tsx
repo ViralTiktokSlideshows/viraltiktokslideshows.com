@@ -68,7 +68,7 @@ export default function UpgradedPage() {
 
   const features = [
     cap ? `${cap} / month` : "More slideshows",
-    "No watermark",
+    "Full quality",
     "Priority support",
   ];
 
@@ -115,7 +115,7 @@ export default function UpgradedPage() {
                 — <span className="font-semibold text-foreground">{cap} slideshows a month</span>
               </>
             ) : null}
-            , full quality, no watermark, no per-unlock checkout. A receipt is on its way to {email}.
+            , full quality, no per-unlock checkout. A receipt is on its way to {email}.
           </p>
 
           <div className="mt-6 flex flex-wrap justify-center gap-2">

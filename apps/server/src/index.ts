@@ -13,6 +13,11 @@ import {
   createUnlockCheckoutSession,
   dodo,
 } from "./lib/dodo";
+import {
+  composeSlideImage,
+  type SlideTextPosition,
+  type SlideTextStyle,
+} from "./lib/compose-slide";
 import { fillRemainingSlideImages, generateSlideshow } from "./lib/generate-slideshow";
 import {
   clearOAuthStateCookie,
@@ -836,7 +841,13 @@ app.get("/api/purchases/:id/slides/:index/image", async (c) => {
   }
 
   const slides = Array.isArray(purchase.slides)
-    ? (purchase.slides as { index: number; text: string; imageUrl?: string }[])
+    ? (purchase.slides as {
+        index: number;
+        text: string;
+        imageUrl?: string;
+        textPosition?: SlideTextPosition;
+        textStyle?: SlideTextStyle;
+      }[])
     : [];
   const slide = slides.find((s) => s.index === index);
 
@@ -874,18 +885,40 @@ app.get("/api/purchases/:id/slides/:index/image", async (c) => {
     );
   }
 
-  const contentType = res.headers.get("content-type") || "image/png";
-  const buffer = new Uint8Array(await res.arrayBuffer());
+  let contentType = res.headers.get("content-type") || "image/png";
+  let buffer = new Uint8Array(await res.arrayBuffer());
+  const isDownload = c.req.query("download") === "1";
 
-  // With ?download=1 the browser is told to SAVE this rather than display
-  // it (Content-Disposition: attachment). That's what makes the download
-  // approach bulletproof: the client just points a plain <a> at this URL
-  // and the browser downloads the file itself -- no fetch, no canvas, no
-  // blob, no Web Share, none of the client-side steps that were stalling
-  // or failing. filename extension follows the real content-type so a
-  // JPEG from Pexels saves as .jpg and a PNG from Ideogram as .png.
+  // With ?download=1 the browser is told to SAVE this rather than display it
+  // (Content-Disposition: attachment). That's what makes the download
+  // bulletproof: the client just points a plain <a download> at this URL and
+  // the browser saves the file itself -- no client fetch, canvas, blob or Web
+  // Share to stall or fail.
+  //
+  // The slide TEXT is baked on here, server-side (see lib/compose-slide.ts),
+  // rather than in the browser -- client-side Canvas compositing kept failing
+  // silently and shipping text-less images. Compositing is best-effort: any
+  // failure (bad decode, missing font) falls through to the bare photo so the
+  // download still succeeds, just without baked text.
+  if (isDownload) {
+    try {
+      const composed = await composeSlideImage(
+        buffer,
+        slide.text,
+        slide.textPosition ?? "top",
+        slide.textStyle ?? "boxed",
+      );
+      buffer = composed.buffer;
+      contentType = composed.contentType;
+    } catch (error) {
+      console.error(`Compositing slide ${index} text for purchase ${purchaseId} failed`, error);
+    }
+  }
+
+  // filename extension follows the real content-type (composited output is
+  // always JPEG; a bare-photo fallback keeps the source's own type).
   const headers: Record<string, string> = { "Content-Type": contentType };
-  if (c.req.query("download") === "1") {
+  if (isDownload) {
     const ext = contentType.includes("jpeg") || contentType.includes("jpg") ? "jpg" : "png";
     const filename = `slide-${String(index).padStart(2, "0")}.${ext}`;
     headers["Content-Disposition"] = `attachment; filename="${filename}"`;

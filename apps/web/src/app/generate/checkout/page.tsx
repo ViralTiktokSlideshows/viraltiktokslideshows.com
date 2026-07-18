@@ -132,7 +132,7 @@ function GenerateCheckoutContent() {
             <div className="flex items-center gap-4 border-t border-border bg-muted/40 px-5 py-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="size-3.5 text-spark" />
-                No watermark
+                Full quality
               </span>
               <span className="flex items-center gap-1.5">
                 <CheckCircle2 className="size-3.5 text-spark" />

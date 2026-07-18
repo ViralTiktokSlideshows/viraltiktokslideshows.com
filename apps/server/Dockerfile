@@ -20,8 +20,12 @@ WORKDIR /app
 # libatomic1: the pnpm standalone installer is a compiled glibc build that dynamically links
 # libatomic, which isn't installed by default on this image ("libatomic.so.1: cannot open
 # shared object file" otherwise).
+# fonts-liberation + fontconfig: the server bakes slide text onto downloaded images with
+# @napi-rs/canvas (see src/lib/compose-slide.ts), which needs a real font file on disk to draw
+# with -- this image ships none by default, so the text would render blank. Liberation Sans is
+# Arial-metric (closest to the app's Inter); compose-slide.ts registers it by path.
 RUN apt-get update -y \
-  && apt-get install -y openssl ca-certificates curl libatomic1 \
+  && apt-get install -y openssl ca-certificates curl libatomic1 fontconfig fonts-liberation \
   && rm -rf /var/lib/apt/lists/*
 
 # Bun is the runtime, but installs go through pnpm. pnpm-workspace.yaml uses the `catalog:`
