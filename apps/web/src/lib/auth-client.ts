@@ -29,6 +29,9 @@ export type SessionUser = {
   name: string | null;
   image: string | null;
   hasCompletedOnboarding: boolean;
+  // True only for accounts in the server's ADMIN_EMAILS list. Gates the
+  // admin-only TikHub research page + its sidebar link.
+  isAdmin?: boolean;
   // Null means no active subscription -- single-unlock ($2/slideshow) is
   // always available regardless, this is purely about the optional
   // monthly-quota tier on top of it.
