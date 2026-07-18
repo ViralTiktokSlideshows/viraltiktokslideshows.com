@@ -72,75 +72,81 @@ function num(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// Pulls the first string URL out of the various shapes TikTok uses: a bare
+// string, { url_list: [...] }, { urlList: [...] }, or { imageURL: { urlList } }.
 function firstUrl(node: unknown): string | null {
-  const list = (node as { url_list?: unknown })?.url_list;
+  if (typeof node === "string") return node || null;
+  if (!node || typeof node !== "object") return null;
+  const o = node as Record<string, unknown>;
+  const list = (o.url_list ?? o.urlList) as unknown;
   if (Array.isArray(list) && typeof list[0] === "string") return list[0];
+  if (o.imageURL) return firstUrl(o.imageURL);
   return null;
 }
 
-// Heuristic: does this object look like a TikTok post/aweme?
-function looksLikePost(obj: unknown): boolean {
-  if (!obj || typeof obj !== "object") return false;
-  const o = obj as Record<string, unknown>;
-  return (
-    "aweme_id" in o ||
-    "aweme_info" in o ||
-    ("desc" in o && ("statistics" in o || "author" in o))
-  );
+// A search result card from fetch_general_search is { type, item, common } for
+// posts (type 1) or { type: 4, user_list } for the "Users" card. We only want
+// the post cards.
+function cardItem(el: unknown): Record<string, unknown> | null {
+  if (!el || typeof el !== "object") return null;
+  const o = el as Record<string, unknown>;
+  if (o.item && typeof o.item === "object") return o.item as Record<string, unknown>;
+  if (o.aweme_info && typeof o.aweme_info === "object") {
+    return o.aweme_info as Record<string, unknown>;
+  }
+  if ("desc" in o && ("stats" in o || "statistics" in o || "author" in o)) return o;
+  return null;
 }
 
-// Walk the response and collect the first meaningful array of posts. TikHub
-// wraps search results differently across endpoints (data.data, data.aweme_list,
-// data.videos, ...), so rather than hard-code one path we find the richest
-// array of post-shaped objects.
-export function extractPosts(data: unknown): TikTokPost[] {
-  const found: unknown[] = [];
+// Finds the search result array (data.data for general search) and normalizes
+// each post card. Falls back to a recursive search for any array of post cards
+// so it still works if the wrapper shape shifts.
+export function extractPosts(payload: unknown): TikTokPost[] {
+  const direct = (payload as { data?: { data?: unknown } })?.data?.data;
+  let cards: unknown[] | null = Array.isArray(direct) ? direct : null;
 
-  function visit(node: unknown, depth: number) {
-    if (!node || depth > 6) return;
-    if (Array.isArray(node)) {
-      if (node.some(looksLikePost)) {
-        for (const item of node) if (looksLikePost(item)) found.push(item);
-      } else {
-        for (const item of node) visit(item, depth + 1);
-      }
-      return;
-    }
-    if (typeof node === "object") {
-      for (const value of Object.values(node as Record<string, unknown>)) {
-        visit(value, depth + 1);
+  if (!cards) {
+    const stack: unknown[] = [payload];
+    let depth = 0;
+    while (stack.length && depth < 5000 && !cards) {
+      const node = stack.shift();
+      depth += 1;
+      if (Array.isArray(node)) {
+        if (node.some((el) => cardItem(el))) cards = node;
+        else stack.push(...node);
+      } else if (node && typeof node === "object") {
+        stack.push(...Object.values(node as Record<string, unknown>));
       }
     }
   }
 
-  visit(data, 0);
-  return found.map(normalizePost).filter((p): p is TikTokPost => p !== null);
+  if (!cards) return [];
+  return cards
+    .map((el) => {
+      const item = cardItem(el);
+      return item ? normalizePost(item) : null;
+    })
+    .filter((p): p is TikTokPost => p !== null);
 }
 
-function normalizePost(raw: unknown): TikTokPost | null {
-  if (!raw || typeof raw !== "object") return null;
-  // Some feeds wrap the real object under aweme_info.
-  const o = (("aweme_info" in raw ? (raw as Record<string, unknown>).aweme_info : raw) ??
-    raw) as Record<string, unknown>;
-
+function normalizePost(o: Record<string, unknown>): TikTokPost | null {
   const id = String(o.aweme_id ?? o.id ?? o.group_id ?? "");
   if (!id) return null;
 
   const author = (o.author ?? {}) as Record<string, unknown>;
-  const stats = (o.statistics ?? o.stats ?? {}) as Record<string, unknown>;
+  const stats = (o.stats ?? o.statistics ?? o.statsV2 ?? {}) as Record<string, unknown>;
   const video = (o.video ?? {}) as Record<string, unknown>;
-  const imagePost = (o.image_post_info ?? o.imagePostInfo ?? {}) as Record<string, unknown>;
+  const imagePost = (o.imagePost ?? o.image_post_info ?? {}) as Record<string, unknown>;
   const images = (imagePost.images ?? []) as unknown[];
 
   const cover =
+    (images.length > 0 ? firstUrl(images[0]) : null) ??
+    firstUrl(imagePost.cover) ??
     firstUrl(video.cover) ??
-    firstUrl(video.origin_cover) ??
-    firstUrl(video.dynamic_cover) ??
-    (images.length > 0
-      ? firstUrl((images[0] as Record<string, unknown>)?.display_image)
-      : null);
+    firstUrl(video.originCover ?? video.origin_cover) ??
+    firstUrl(video.dynamicCover ?? video.dynamic_cover);
 
-  const handle = String(author.unique_id ?? author.uniqueId ?? "");
+  const handle = String(author.uniqueId ?? author.unique_id ?? "");
 
   return {
     id,
@@ -150,34 +156,82 @@ function normalizePost(raw: unknown): TikTokPost | null {
     cover,
     imageCount: images.length,
     isSlideshow: images.length > 0,
-    playCount: num(stats.play_count ?? stats.playCount),
-    likeCount: num(stats.digg_count ?? stats.diggCount ?? stats.like_count),
-    commentCount: num(stats.comment_count ?? stats.commentCount),
-    shareCount: num(stats.share_count ?? stats.shareCount),
-    createTime: o.create_time ? num(o.create_time) : null,
+    playCount: num(stats.playCount ?? stats.play_count),
+    likeCount: num(stats.diggCount ?? stats.digg_count ?? stats.like_count),
+    commentCount: num(stats.commentCount ?? stats.comment_count),
+    shareCount: num(stats.shareCount ?? stats.share_count),
+    createTime: o.createTime ? num(o.createTime) : o.create_time ? num(o.create_time) : null,
     url: handle
       ? `https://www.tiktok.com/@${handle}/video/${id}`
       : `https://www.tiktok.com/@/video/${id}`,
   };
 }
 
-// Default TikTok keyword search. sortType: 0 relevance, 1 most liked; publishTime:
-// 0 all time, 1 day, 7 week, 30 month, 90 three months, 180 six months.
+// How many general-search pages one search may fetch while hunting for
+// slideshows. TikHub's web search has no photo-mode filter, so a page is a
+// mix of videos + slideshows; we page through and keep only the slideshows.
+// Each page is a separate billed TikHub request, so this is capped low to
+// keep the cost of one search predictable.
+const MAX_SEARCH_PAGES = 3;
+
+// Slideshow-only TikTok keyword search. Pages through fetch_general_search
+// (the current supported endpoint -- fetch_search_video was removed and 400s),
+// keeping only photo-mode posts (carousels/slideshows) and dropping videos +
+// user cards, until it has `limit` of them or runs out of pages. `offset` +
+// `search_id` from each response drive the next page.
 export async function searchTikTok(options: {
   keyword: string;
-  count?: number;
-  offset?: number;
-  sortType?: number;
-  publishTime?: number;
+  limit?: number;
 }): Promise<{ result: ProxyResult; posts: TikTokPost[] }> {
-  const result = await tikhubProxy("api/v1/tiktok/web/fetch_search_video", {
-    keyword: options.keyword,
-    count: options.count ?? 20,
-    offset: options.offset ?? 0,
-    sort_type: options.sortType ?? 0,
-    publish_time: options.publishTime ?? 0,
-  });
-  return { result, posts: result.ok ? extractPosts(result.data) : [] };
+  const limit = options.limit ?? 20;
+  const collected: TikTokPost[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+  let searchId = "";
+  let lastResult: ProxyResult = { status: 0, ok: false, data: null };
+
+  for (let page = 0; page < MAX_SEARCH_PAGES && collected.length < limit; page++) {
+    const result = await tikhubProxy("api/v1/tiktok/web/fetch_general_search", {
+      keyword: options.keyword,
+      offset,
+      search_id: searchId,
+    });
+    lastResult = result;
+    if (!result.ok) break;
+
+    for (const post of extractPosts(result.data)) {
+      if (post.isSlideshow && !seen.has(post.id)) {
+        seen.add(post.id);
+        collected.push(post);
+      }
+    }
+
+    const feed = (result.data as { data?: { has_more?: unknown; cursor?: unknown } })?.data;
+    searchId = extractSearchId(result.data) || searchId;
+    if (!feed?.has_more) break;
+    offset = typeof feed.cursor === "number" ? feed.cursor : offset + 10;
+  }
+
+  return { result: lastResult, posts: collected.slice(0, limit) };
+}
+
+// The general-search response carries a search_id (aka log_pb.impr_id / extra)
+// needed to fetch the next page. Best-effort dig for it.
+function extractSearchId(data: unknown): string {
+  let found = "";
+  function visit(node: unknown, depth: number) {
+    if (found || !node || depth > 6 || typeof node !== "object") return;
+    const o = node as Record<string, unknown>;
+    for (const [key, value] of Object.entries(o)) {
+      if ((key === "search_id" || key === "impr_id") && typeof value === "string" && value) {
+        found = value;
+        return;
+      }
+      if (typeof value === "object") visit(value, depth + 1);
+    }
+  }
+  visit(data, 0);
+  return found;
 }
 
 export function formatCount(n: number): string {

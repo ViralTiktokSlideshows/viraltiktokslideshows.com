@@ -106,20 +106,34 @@ export function RevealStep({ data }: { data: GeneratedSlideshow }) {
   }, []);
 
   // Plan-covered generation (or the initial fresh-session check): no unlock
-  // screen, just a build-in-progress state until the redirect lands.
+  // screen, just a build-in-progress state until the redirect lands. Mirrors
+  // GeneratingStep's animated-card treatment so the whole generate flow feels
+  // like one continuous experience.
   if (gate === "checking" || gate === "auto") {
     return (
       <StepShell>
-        <div className="flex flex-col items-center py-16 text-center">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-          <h2 className="mt-6 font-display text-xl font-bold text-foreground">
+        <div className="animate-in fade-in-0 flex flex-col items-center py-16 text-center duration-500 ease-out">
+          <div className="relative h-40 w-32">
+            <div className="absolute inset-2 rounded-2xl bg-border" />
+            <div className="absolute inset-0 animate-pulse rounded-2xl border border-border bg-gradient-to-br from-spark/40 via-spark/15 to-transparent shadow-lg" />
+            <div className="absolute inset-x-4 bottom-4 flex flex-col gap-1.5">
+              <div className="h-2 w-3/4 rounded-2xl bg-spark/50" />
+              <div className="h-2 w-1/2 rounded-2xl bg-spark/35" />
+            </div>
+          </div>
+
+          <h2 className="mt-8 font-display text-2xl font-bold text-foreground sm:text-3xl">
             {gate === "auto" ? "Building your full slideshow…" : "Getting things ready…"}
           </h2>
-          <p className="mt-2 max-w-xs text-sm text-muted-foreground">
+          <p className="mt-3 max-w-sm text-sm text-muted-foreground">
             {gate === "auto"
-              ? "Using your plan — this only takes a few seconds."
-              : "One moment."}
+              ? "Using your plan — all your slides, full quality. This only takes a few seconds."
+              : "One moment while we set things up."}
           </p>
+
+          <div className="mt-6 h-1.5 w-full max-w-xs overflow-hidden rounded-2xl bg-border">
+            <div className="h-full w-1/2 animate-pulse rounded-2xl bg-spark" />
+          </div>
         </div>
       </StepShell>
     );
