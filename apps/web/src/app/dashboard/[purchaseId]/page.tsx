@@ -23,9 +23,11 @@ import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
 import {
+  copyToClipboard,
   fetchPurchases,
   formatRelativeTime,
   saveSlidesToDevice,
+  shareSlideImages,
   toggleSaved,
   type PurchaseSummary,
 } from "@/lib/purchases-client";
@@ -116,13 +118,30 @@ export default function SlideshowDetailPage() {
     }
   }
 
-  async function handleCopyCaption() {
+  // Share button: on a phone, open the native share sheet with all the slide
+  // IMAGES so they can be sent straight into TikTok / IG / Messages / Photos.
+  // Where native file-sharing isn't available (most desktops), fall back to
+  // copying the caption + hashtags to the clipboard.
+  async function handleShare() {
     try {
-      await navigator.clipboard.writeText(`${caption}\n\n${hashtags.join(" ")}`);
+      const result = await shareSlideImages(paid.id, paid.slides);
+      if (result === "shared") return;
+    } catch {
+      // No images / fetch failed -- fall through to copying the caption.
+    }
+    const ok = await copyToClipboard(`${caption}\n\n${hashtags.join(" ")}`.trim());
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Clipboard can fail on insecure contexts -- not worth surfacing.
+    }
+  }
+
+  // The "Copy all" button in the caption card — always copies (no share).
+  async function handleCopyCaption() {
+    const ok = await copyToClipboard(`${caption}\n\n${hashtags.join(" ")}`.trim());
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
     }
   }
 
@@ -229,7 +248,7 @@ export default function SlideshowDetailPage() {
             >
               <Star className={cn("size-4", saved && "fill-current")} />
             </Button>
-            <Button size="icon" variant="outline" aria-label="Copy caption" onClick={handleCopyCaption}>
+            <Button size="icon" variant="outline" aria-label="Share slides" onClick={handleShare}>
               {copied ? <Check className="size-4" /> : <Share2 className="size-4" />}
             </Button>
           </div>

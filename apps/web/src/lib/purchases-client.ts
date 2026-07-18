@@ -91,19 +91,123 @@ function triggerDownload(href: string, filename: string): void {
   link.remove();
 }
 
-// Saves every slide image to the device. Text is baked in server-side, so
-// this just points an anchor at each slide's ?download=1 URL, one at a time
-// with a small gap so the browser doesn't block the burst of downloads.
-export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]): Promise<void> {
+function slidesZipUrl(purchaseId: string): string {
+  return `${SERVER_URL}/api/purchases/${purchaseId}/slides.zip`;
+}
+
+// Copies text to the clipboard, with an execCommand fallback for browsers /
+// in-app webviews where the async Clipboard API is blocked or missing.
+export async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to the legacy path
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+// True on touch devices with a working share sheet (phones/tablets). Kept off
+// desktop on purpose: desktop file-sharing is flaky/hangs, and desktop has a
+// perfectly good zip download instead. Checked BEFORE fetching any images so
+// desktop never downloads the whole set just to fall back to the zip.
+function prefersNativeShare(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.share === "function" &&
+    typeof navigator.canShare === "function" &&
+    typeof window !== "undefined" &&
+    Boolean(window.matchMedia?.("(pointer: coarse)").matches)
+  );
+}
+
+// Fetches one slide as a File with its baked-in text (server composites it on
+// the ?download=1 route). Used to build the file list for native sharing.
+async function fetchSlideFile(purchaseId: string, index: number): Promise<File> {
+  const res = await authedFetch(slideImageUrl(purchaseId, index, true));
+  if (!res.ok) throw new Error(`Slide ${index} request failed (${res.status})`);
+  const blob = await res.blob();
+  const ext = blob.type.includes("png") ? "png" : "jpg";
+  return new File([blob], `slide-${String(index).padStart(2, "0")}.${ext}`, {
+    type: blob.type || "image/jpeg",
+  });
+}
+
+async function fetchSlideFiles(purchaseId: string, slides: SlideData[]): Promise<File[]> {
   const withImages = slides.filter((slide) => slide.imageUrl);
   if (withImages.length === 0) {
     throw new Error("No images are available for this slideshow yet.");
   }
+  return Promise.all(withImages.map((slide) => fetchSlideFile(purchaseId, slide.index)));
+}
 
-  for (const slide of withImages) {
-    const filename = `slide-${String(slide.index).padStart(2, "0")}.jpg`;
-    triggerDownload(slideImageUrl(purchaseId, slide.index, true), filename);
-    await new Promise((resolve) => setTimeout(resolve, 450));
+// Gets every slide onto the device. The old approach fired one <a download>
+// per slide, but browsers block every download after the first from a single
+// click -- which is why only slide 1 ever saved. Now:
+//   - phones/tablets: open the native share sheet with ALL slides as files ->
+//     one tap saves them straight to Photos (no zip to unpack on mobile).
+//   - desktop: a single .zip of every baked slide -- one reliable download.
+export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]): Promise<void> {
+  const hasImages = slides.some((slide) => slide.imageUrl);
+  if (!hasImages) {
+    throw new Error("No images are available for this slideshow yet.");
+  }
+
+  if (prefersNativeShare()) {
+    try {
+      const files = await fetchSlideFiles(purchaseId, slides);
+      if (navigator.canShare({ files })) {
+        await navigator.share({ files, title: "My TikTok slideshow" });
+        return;
+      }
+    } catch (err) {
+      // User dismissing the share sheet is a normal outcome, not a failure.
+      if (err instanceof Error && err.name === "AbortError") return;
+      // Otherwise fall through to the zip download below.
+    }
+  }
+
+  triggerDownload(slidesZipUrl(purchaseId), "slideshow.zip");
+}
+
+// Opens the native share sheet with every slide image so the user can send the
+// whole set straight into another app (TikTok, Instagram, Messages, Photos).
+// Returns "unsupported" when native file-sharing isn't available (most
+// desktops) so the caller can fall back (e.g. copy the caption instead).
+export async function shareSlideImages(
+  purchaseId: string,
+  slides: SlideData[],
+): Promise<"shared" | "unsupported"> {
+  const files = await fetchSlideFiles(purchaseId, slides);
+  if (
+    typeof navigator === "undefined" ||
+    typeof navigator.share !== "function" ||
+    typeof navigator.canShare !== "function" ||
+    !navigator.canShare({ files })
+  ) {
+    return "unsupported";
+  }
+  try {
+    await navigator.share({ files, title: "My TikTok slideshow" });
+    return "shared";
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") return "shared";
+    return "unsupported";
   }
 }
 
