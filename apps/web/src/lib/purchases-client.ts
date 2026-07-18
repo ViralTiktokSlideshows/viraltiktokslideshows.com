@@ -7,6 +7,7 @@ import type {
   SlideTextStyle,
 } from "@/components/generate/slide-text-style";
 
+import { trackEvent } from "./analytics";
 import { authedFetch } from "./api-fetch";
 
 const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
@@ -167,6 +168,8 @@ export async function saveSlidesToDevice(purchaseId: string, slides: SlideData[]
   if (!hasImages) {
     throw new Error("No images are available for this slideshow yet.");
   }
+
+  trackEvent("download_slides", { slides: slides.filter((s) => s.imageUrl).length });
 
   if (prefersNativeShare()) {
     try {
