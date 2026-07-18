@@ -2,6 +2,7 @@
 
 import {
   Bookmark,
+  FlaskConical,
   HelpCircle,
   LayoutGrid,
   LogOut,
@@ -39,6 +40,11 @@ const NAV_ITEMS = [
 // during generate keeps the icon set tight since screen space is precious
 // there.
 const EXPANDED_ONLY_ITEM = { href: "/dashboard/help", label: "Help & support", icon: HelpCircle };
+
+// Admin-only: the TikHub research page. Appended to the nav only for accounts
+// whose session comes back with isAdmin (server ADMIN_EMAILS). Everyone else
+// never sees the link, and the page itself + its API are gated too.
+const ADMIN_ITEM = { href: "/dashboard/research", label: "Research", icon: FlaskConical };
 
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
@@ -138,7 +144,8 @@ function SidebarContent({
 }) {
   const pathname = usePathname();
   const { user, isPending } = useSession();
-  const items = compact ? NAV_ITEMS : [...NAV_ITEMS, EXPANDED_ONLY_ITEM];
+  const baseItems = compact ? NAV_ITEMS : [...NAV_ITEMS, EXPANDED_ONLY_ITEM];
+  const items = user?.isAdmin ? [...baseItems, ADMIN_ITEM] : baseItems;
 
   return (
     <div className="flex h-full flex-col gap-6 p-3">
