@@ -128,23 +128,32 @@ async function generateStockSlideImage(slide: StockSlide): Promise<string> {
   // concept, then progressively broader fallbacks. Each is only tried if
   // the previous returned nothing, so a good `visual` hit is a single call.
   const attempts: string[] = [];
+  const pushUnique = (q: string) => {
+    const trimmed = q.trim();
+    if (trimmed && !attempts.includes(trimmed)) attempts.push(trimmed);
+  };
 
   if (slide.visual) {
     const normalized = normalizeVisualQuery(slide.visual);
     if (normalized) {
-      attempts.push(normalized);
-      // A long, specific visual can miss; a broader first-few-words version
-      // of the same concept usually still lands something on-theme.
-      const broad = normalized.split(" ").slice(0, 3).join(" ");
-      if (broad && broad !== normalized) attempts.push(broad);
+      const words = normalized.split(" ");
+      // Progressively simpler queries -- full concept first, then shorter
+      // and shorter, down to the single most important word. A short query
+      // ("gym", "cash") almost always returns *something* on a big stock
+      // library, so a slide rarely falls through to the Ideogram fallback.
+      pushUnique(normalized);
+      if (words.length > 3) pushUnique(words.slice(0, 3).join(" "));
+      if (words.length > 2) pushUnique(words.slice(0, 2).join(" "));
+      // The last word is usually the concrete noun ("stacks of cash" -> "cash").
+      if (words.length > 1) pushUnique(words[words.length - 1] ?? "");
+      pushUnique(words[0] ?? "");
     }
   }
 
-  // Last resort: scrape keywords from the slide's own text. Weakest option
-  // (this is the behavior that used to be the *only* behavior and returned
-  // nothing for abstract slides), but better than no image at all.
-  const textQuery = queryFromSlideText(slide.text);
-  if (!attempts.includes(textQuery)) attempts.push(textQuery);
+  // Last resort: scrape keywords from the slide's own text, then a neutral
+  // on-brand query so we practically never come back empty.
+  pushUnique(queryFromSlideText(slide.text));
+  pushUnique("aesthetic lifestyle");
 
   let photoUrl: string | null = null;
   for (const query of attempts) {
