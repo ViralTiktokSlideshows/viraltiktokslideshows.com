@@ -34,6 +34,7 @@ export type PurchaseSummary = {
   createdAt: string;
   saved?: boolean;
   format?: SlideFormat | null;
+  vibes?: string[];
 };
 
 export async function fetchPurchases(): Promise<PurchaseSummary[]> {

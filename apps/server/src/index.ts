@@ -423,7 +423,7 @@ app.post("/api/billing/subscribe", async (c) => {
       productId,
       customerEmail: user.email,
       customerName: user.name || user.email,
-      returnUrl: `${env.CORS_ORIGIN}/dashboard/settings?subscribed=1`,
+      returnUrl: `${env.CORS_ORIGIN}/dashboard/upgraded`,
     });
     return c.json({ checkoutUrl: session.checkout_url });
   } catch (error) {
@@ -771,6 +771,7 @@ app.get("/api/purchases", async (c) => {
       createdAt: p.createdAt,
       saved: p.saved,
       format: p.format,
+      vibes: p.vibes,
     })),
   });
 });
