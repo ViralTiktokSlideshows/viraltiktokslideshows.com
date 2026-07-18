@@ -17,6 +17,7 @@
     "arctic": "^3.7.0",
     "dodopayments": "^2.42.2",
     "dotenv": "catalog:",
+    "fflate": "^0.8.2",
     "hono": "^4.12.27",
     "nodemailer": "^8.0.10",
     "sharp": "^0.33.5",

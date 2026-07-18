@@ -2,6 +2,7 @@ import prisma from "@viraltiktokslideshows/db";
 import type { User } from "@viraltiktokslideshows/db";
 import { env } from "@viraltiktokslideshows/env/server";
 import * as arctic from "arctic";
+import { zipSync } from "fflate";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -929,6 +930,86 @@ app.get("/api/purchases/:id/slides/:index/image", async (c) => {
   }
 
   return c.body(buffer, 200, headers);
+});
+
+// All slides as a single .zip, each with its text baked in. This is the
+// desktop download path (see saveSlidesToDevice in the web app): browsers
+// block firing one <a download> per slide, so a single archive is the only
+// reliable way to hand over the whole set at once. Mobile uses the native
+// share sheet instead and never hits this.
+app.get("/api/purchases/:id/slides.zip", async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json({ error: "Not authenticated" }, 401);
+  }
+
+  const purchaseId = c.req.param("id");
+  const purchase = await prisma.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase || purchase.userId !== user.id) {
+    return c.json({ error: "Purchase not found" }, 404);
+  }
+  if (purchase.status !== "PAID") {
+    return c.json({ error: "This slideshow isn't unlocked" }, 403);
+  }
+
+  const slides = Array.isArray(purchase.slides)
+    ? (purchase.slides as {
+        index: number;
+        text: string;
+        imageUrl?: string;
+        textPosition?: SlideTextPosition;
+        textStyle?: SlideTextStyle;
+      }[])
+    : [];
+  const withImages = slides.filter((s) => s.imageUrl);
+  if (withImages.length === 0) {
+    return c.json({ error: "No images for this slideshow" }, 404);
+  }
+
+  // Fetch + composite every slide in parallel. A failed slide is skipped
+  // rather than failing the whole archive.
+  const files: Record<string, Uint8Array> = {};
+  await Promise.all(
+    withImages.map(async (slide) => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20_000);
+      try {
+        const res = await fetch(slide.imageUrl as string, { signal: controller.signal });
+        if (!res.ok) return;
+        let bytes = new Uint8Array(await res.arrayBuffer());
+        let ext = "jpg";
+        try {
+          const composed = await composeSlideImage(
+            bytes,
+            slide.text,
+            slide.textPosition ?? "top",
+            slide.textStyle ?? "boxed",
+          );
+          bytes = new Uint8Array(composed.buffer);
+          ext = composed.contentType.includes("png") ? "png" : "jpg";
+        } catch (error) {
+          console.error(`Compositing slide ${slide.index} for zip ${purchaseId} failed`, error);
+        }
+        files[`slide-${String(slide.index).padStart(2, "0")}.${ext}`] = bytes;
+      } catch (error) {
+        console.error(`Fetching slide ${slide.index} for zip ${purchaseId} failed`, error);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }),
+  );
+
+  if (Object.keys(files).length === 0) {
+    return c.json({ error: "Could not build the download. Try again." }, 502);
+  }
+
+  // level 0 = store: the JPEGs are already compressed, so this just packages
+  // them (fast, no wasted CPU).
+  const archive = zipSync(files, { level: 0 });
+  return c.body(archive, 200, {
+    "Content-Type": "application/zip",
+    "Content-Disposition": 'attachment; filename="slideshow.zip"',
+  });
 });
 
 // --- Admin-only TikHub research proxy ------------------------------------
