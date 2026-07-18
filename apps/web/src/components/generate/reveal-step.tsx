@@ -14,6 +14,7 @@ import {
 } from "@viraltiktokslideshows/ui/components/alert-dialog";
 import { Button } from "@viraltiktokslideshows/ui/components/button";
 
+import { trackEvent } from "@/lib/analytics";
 import { getFreshUser, useSession, type PlanUsage } from "@/lib/auth-client";
 import { createCheckoutSession, savePendingSlideshow } from "@/lib/checkout-client";
 
@@ -57,6 +58,8 @@ export function RevealStep({ data }: { data: GeneratedSlideshow }) {
     if (isRedirecting) return;
     setError("");
     setIsRedirecting(true);
+
+    trackEvent("unlock_click", { gate });
 
     const freshUser = await getFreshUser();
     if (!freshUser) {

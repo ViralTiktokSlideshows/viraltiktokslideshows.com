@@ -6,6 +6,7 @@ import { env } from "@viraltiktokslideshows/env/web";
 import { cn } from "@viraltiktokslideshows/ui/lib/utils";
 
 import { TurnstileWidget } from "@/components/turnstile-widget";
+import { trackEvent } from "@/lib/analytics";
 
 import type { GeneratedSlideshow } from "./types";
 
@@ -64,6 +65,8 @@ export function GeneratingStep({
     const progressInterval = setInterval(() => {
       setProgress((prev) => (prev < 90 ? prev + Math.random() * 10 : prev));
     }, 400);
+
+    trackEvent("generate_start", { formats: formats.join(",") || "default" });
 
     const minDelay = new Promise((resolve) => setTimeout(resolve, 2200));
     const request = fetch(`${env.NEXT_PUBLIC_SERVER_URL}/api/generate`, {
