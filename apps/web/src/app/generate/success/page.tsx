@@ -310,16 +310,18 @@ function SuccessContent() {
                     )}
                     Download all {slides.length} slides
                   </Button>
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="gap-2"
-                    nativeButton={false}
-                    render={<Link href="/generate/upgrade" />}
-                  >
-                    <Zap className="size-4" data-icon="inline-start" />
-                    {isRepeatBuyer ? "Choose a plan" : "Upgrade plan"}
-                  </Button>
+                  {hasPlan ? null : (
+                    <Button
+                      size="lg"
+                      variant="outline"
+                      className="gap-2"
+                      nativeButton={false}
+                      render={<Link href="/generate/upgrade" />}
+                    >
+                      <Zap className="size-4" data-icon="inline-start" />
+                      {isRepeatBuyer ? "Choose a plan" : "Upgrade plan"}
+                    </Button>
+                  )}
                 </div>
                 {downloadState === "error" ? (
                   <p className="mt-2 text-xs text-destructive">
