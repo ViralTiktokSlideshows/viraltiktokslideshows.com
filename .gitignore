@@ -9,6 +9,8 @@ build
 *.tsbuildinfo
 
 scripts/
+content/
+plans/
 slideshow-research.csv
 
 # Generated files
