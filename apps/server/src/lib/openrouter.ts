@@ -79,12 +79,21 @@ Return ONLY a JSON object, no markdown fences, no commentary, matching this exac
 {"slides": [{"text": "...", "visual": "...", "textPosition": "top"}, ...]}
 
 ## text (the words shown on the slide)
-- 6 to 8 slides total.
-- Slide 1 is the hook: it must earn the next slide in under a second — a bold claim, a specific number, a "nobody tells you" angle, or a direct question. No generic openers.
-- Each slide's text is one short punchy line: no hashtags, no emoji, no slide numbers or labels.
-- Hard cap: 8 words / 55 characters per slide. This renders as large bold overlay text on a photo — think "Ego is the enemy" or "Force consistency," not a full sentence with clauses. If an idea needs more room, cut it to its sharpest phrase.
-- The deck should build: hook, tension/context, 3-5 payoff/insight slides, a closing line that lands the point.
+- Slide count is set by the STYLE block below — follow it exactly.
+- Slide 1 is THE HOOK. Rules: 7 words or fewer, second person (talk to one person), and either a command or a curiosity gap — never a description or a label. No generic openers ("Here are...", "Top 5 ways...", soft questions that build no tension).
+- Every other slide: one idea, one short line. Hard cap 10 words / 60 characters. Large bold overlay text like "Ego is the enemy" or "Force consistency" — not a sentence with clauses.
+- No hashtags, emoji, slide numbers, or labels in the text.
+- Write for the SAVE — give something worth keeping. In list decks every slide is one concrete, actionable step (checklist energy), not filler.
 - Confident, conversational voice — a smart friend explaining something, not a corporate caption.
+
+## hook principles — STUDY THESE, DO NOT COPY THEM
+Below are 20 REAL hooks from viral slideshows. Do NOT reuse their words, phrasing, or topics. Extract the PRINCIPLES they share and apply those to THIS idea:
+- short — most are under 8 words
+- second person, spoken to one person, often a command
+- a curiosity gap or a command, never a description
+- concrete and plain — no clever wordplay
+- implies a payoff worth swiping or saving for
+Examples: "thank me later" | "As a father should." | "put that phone down and start doing something" | "clear your desk, tie your hair up, grab a coffee, and just start" | "save this for your next workout" | "books I finished vs books that finished me" | "keep doing." | "you got this" | "try one and report back" | "take the first step, you won't take the step back" | "the only academic comeback checklist you'll ever need" | "the most effective study method for each subject" | "lock in twin" | "damn." | "focus on your way, not what others think of you" | "the unglamorous version of having it together" | "learn something new every day before you sleep" | "books so good you'll fly through them" | "if I woke up without my memories I'm grabbing THESE first" | "cool girls read cool books"
 
 ## visual (the STOCK-PHOTO SEARCH TERM for that slide) — READ CAREFULLY
 - This is a real search query typed into a stock photo site (Pexels), NOT the slide's message. It must return results, so keep it SHORT and COMMON.
@@ -103,13 +112,16 @@ Return ONLY a JSON object, no markdown fences, no commentary, matching this exac
 // defaults preference (see /api/generate in index.ts) — there's no format
 // picker step in the generate flow itself anymore, so this is the only
 // place "format" actually does anything.
+// Slide counts are deliberately BIMODAL, from the research: viral slideshows
+// cluster at 2-3 (punchy quote/claim) or 6-8 (a real list) -- almost nothing
+// lands in a mushy 4-5, so we never target that range.
 const FORMAT_DIRECTIVES: Record<SlideFormat, string> = {
   STORYTIME:
-    "Style: a narrative arc — hook, rising tension/context, insight slides, a satisfying closing line. This is the default, story-driven style.",
+    "Style: a narrative arc across 6 to 8 slides — hook, rising tension/context, insight slides, a satisfying closing line. This is the default, story-driven style.",
   LISTICLE:
-    'Style: a numbered list. The hook slide teases a count (e.g. "5 things nobody tells you about X"), and every following slide delivers exactly one item with a short, punchy explanation — no story arc, just the list.',
+    'Style: a numbered list of 6 to 8 slides. The hook teases a count (e.g. "5 things nobody tells you about X") and every following slide delivers exactly ONE concrete, actionable item people would want to save — no story arc, just the list.',
   HOT_TAKE:
-    "Style: a bold, opinionated, slightly contrarian voice — like someone dropping an unpopular but well-argued take. The hook slide is a provocative claim, not a question, and the closing slide doubles down rather than softening it.",
+    "Style: a punchy QUOTE/CLAIM deck of just 2 to 3 slides — no list, no story arc. Slide 1 is a provocative claim or hard-hitting line; the final slide doubles down and lands it. Keep every line short and quotable.",
 };
 
 type RawSlide = { text: string; visual?: string; textPosition?: SlideTextPosition };
@@ -176,8 +188,10 @@ async function attemptGenerate(
     throw new Error("OpenRouter returned no content");
   }
 
+  // Minimum 2: HOT_TAKE quote decks are intentionally 2-3 slides now (see
+  // FORMAT_DIRECTIVES). Below 2 there's no slideshow, so that's still a fail.
   const rawSlides = parseSlidesJson(content);
-  if (!rawSlides || rawSlides.length < 3) {
+  if (!rawSlides || rawSlides.length < 2) {
     console.error(
       `[openrouter] unusable slide list (got ${rawSlides?.length ?? 0} slides) -- raw content:`,
       content.slice(0, 500),
