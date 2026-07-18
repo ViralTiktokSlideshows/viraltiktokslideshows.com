@@ -21,6 +21,7 @@ import type {
 } from "@/components/generate/slide-text-style";
 import { GenerateShell } from "@/components/dashboard/generate-shell";
 import { SlideshowPhonePreview } from "@/components/generate/slideshow-phone-preview";
+import { trackEvent } from "@/lib/analytics";
 import { useSession } from "@/lib/auth-client";
 import { saveSlidesToDevice } from "@/lib/purchases-client";
 import { fetchSettings } from "@/lib/settings-client";
@@ -168,6 +169,11 @@ function SuccessContent() {
       cancelled = true;
     };
   }, [purchaseId, paymentId]);
+
+  // Fire the conversion once, when the purchase confirms as PAID.
+  useEffect(() => {
+    if (status === "paid") trackEvent("purchase_success");
+  }, [status]);
 
   if (status === "paid" && slides.length > 0) {
     const { caption, hashtags } = buildCaption(idea, slides[0]?.text ?? "");

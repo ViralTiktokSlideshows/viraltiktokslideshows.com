@@ -9,6 +9,7 @@ import { Button } from "@viraltiktokslideshows/ui/components/button";
 
 import { GenerateShell } from "@/components/dashboard/generate-shell";
 import { type PlanTier, useSession } from "@/lib/auth-client";
+import { trackEvent } from "@/lib/analytics";
 import { subscribeToPlan } from "@/lib/settings-client";
 
 // Real subscription checkout now that Dodo's subscription products exist
@@ -39,6 +40,7 @@ function UpgradeContent() {
     if (loadingTier) return;
 
     setError("");
+    trackEvent("subscribe_click", { tier });
 
     if (!user) {
       const callbackURL = `/generate/upgrade?tier=${tier}`;
