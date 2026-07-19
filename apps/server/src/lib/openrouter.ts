@@ -27,12 +27,12 @@ export type GeneratedSlideText = {
   index: number;
   text: string;
   textStyle?: SlideTextStyle;
-  // A concrete, literal description of the *background photo* this slide
-  // should have -- a real scene a photographer could shoot, NOT the slide's
-  // message. This is what actually gets searched on Pexels / handed to
-  // Ideogram (see generate-slideshow.ts). Optional because a degraded model
-  // response might omit it; downstream falls back to keyword-extracting the
-  // slide text in that case (see stock-photos.ts).
+  // The library concept for this slide's background image -- ideally copied
+  // verbatim from the injected "## image library" list (e.g. "dark aesthetic
+  // gym", "stacks of cash"), NOT the slide's message. Used by library.ts to
+  // resolve a real R2 image (exact match first, then fuzzy). Optional because a
+  // degraded model response might omit it; retrieval then falls back to a
+  // same-niche / global-random library image.
   visual?: string;
   textPosition?: SlideTextPosition;
 };
@@ -50,11 +50,15 @@ export type GeneratedSlideshowText = {
 export type SlideFormat = "STORYTIME" | "LISTICLE" | "HOT_TAKE";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-// Claude Haiku 4.5: sharper, more "human" punchy copy for hooks than Gemini
-// Flash, at a lower price ($1/$5 per 1M vs Gemini 3.5 Flash's $1.50/$9) --
-// text is the cheap part of a generation either way (a fraction of one
-// Ideogram image), so this is a quality upgrade with no real margin cost.
-const MODEL = "anthropic/claude-haiku-4.5";
+// Claude Sonnet 5: now that images are pulled from our own R2 library (free)
+// instead of generated per-slide by Ideogram, the text model is the ONLY spend
+// on a generation and it's tiny (~$0.01/deck). Sonnet is a real step up over
+// Haiku at instruction-following, which matters here: it has to pick each
+// slide's image concept from a live, finite list of what's actually in the
+// library (see the vocabulary injected into the prompt) rather than inventing
+// a search term. If this exact OpenRouter slug ever 404s, that's the thing to
+// check first.
+const MODEL = "anthropic/claude-sonnet-5";
 
 type OpenRouterResponse = {
   choices?: { message?: { content?: string } }[];
@@ -73,7 +77,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 // which matches no stock photo and returned nothing. A slide's words and a
 // slide's background are different jobs: "Ego is the enemy" is good text; the
 // photo behind it is "a lone climber on a mountain ridge," not the sentence.
-const BASE_SYSTEM_PROMPT = `You are a scriptwriter AND an art director for viral TikTok photo-slideshows. For one idea you produce a short deck where every slide has punchy overlay text AND a described background photo chosen specifically for that slide.
+const BASE_SYSTEM_PROMPT = `You are a scriptwriter AND an art director for viral TikTok photo-slideshows. For one idea you produce a short deck where every slide has punchy overlay text AND a background image chosen for that slide from a fixed image library (listed below).
 
 Return ONLY a JSON object, no markdown fences, no commentary, matching this exact shape:
 {"slides": [{"text": "...", "visual": "...", "textPosition": "top"}, ...]}
@@ -95,13 +99,13 @@ Below are 20 REAL hooks from viral slideshows. Do NOT reuse their words, phrasin
 - implies a payoff worth swiping or saving for
 Examples: "thank me later" | "As a father should." | "put that phone down and start doing something" | "clear your desk, tie your hair up, grab a coffee, and just start" | "save this for your next workout" | "books I finished vs books that finished me" | "keep doing." | "you got this" | "try one and report back" | "take the first step, you won't take the step back" | "the only academic comeback checklist you'll ever need" | "the most effective study method for each subject" | "lock in twin" | "damn." | "focus on your way, not what others think of you" | "the unglamorous version of having it together" | "learn something new every day before you sleep" | "books so good you'll fly through them" | "if I woke up without my memories I'm grabbing THESE first" | "cool girls read cool books"
 
-## visual (the STOCK-PHOTO SEARCH TERM for that slide) — READ CAREFULLY
-- This is a real search query typed into a stock photo site (Pexels), NOT the slide's message. It must return results, so keep it SHORT and COMMON.
-- STRICT: 2 to 3 plain words. One concrete subject, optionally one setting/mood word. Nothing more.
-- Use everyday, high-frequency nouns a big stock library definitely has. Think "gym workout", "stacks of cash", "man running", "city skyline", "empty road", "coffee desk", "ocean waves", "night city".
-- Do NOT write descriptive sentences or rare compound phrases. BAD: "athlete stretching exhausted after intense training" (too long, no results). GOOD: "tired athlete" or "gym workout". BAD: "person alone scrolling phone dark room". GOOD: "phone in dark".
-- NEVER put the slide's own words, the topic name, or abstract concepts in it. Translate the meaning into a common physical thing: a finance slide -> "stacks of cash", "luxury car", "modern mansion"; a fitness slide -> "gym workout", "running shoes", "barbell"; a focus/productivity slide -> "coffee desk", "person writing", "quiet office".
-- No text/words/logos/charts in the photo. One clear subject per slide. Vary the subject across the deck — don't repeat the same one.
+## visual (WHICH LIBRARY IMAGE this slide uses) — READ CAREFULLY, STRICT
+- Every background comes from our fixed image library, listed under "## image library" below: niches, each with the EXACT concepts available.
+- Set "visual" to the concept from that list that best fits this slide, copied VERBATIM (e.g. "dark aesthetic gym", "cozy library", "stacks of cash"). It must be a string that appears in the library list.
+- Do NOT invent concepts. If nothing fits perfectly, pick the closest available concept in the most relevant niche. Never output a concept that isn't in the list.
+- Translate the slide's MESSAGE into a physical scene, then match it to a listed concept: a money line -> "stacks of cash" / "luxury car"; a focus line -> "coffee desk laptop" / "clean desk setup"; a gym line -> "barbell close up" / "dark aesthetic gym".
+- Never put the slide's own words, the topic name, or abstract ideas in "visual".
+- Vary concepts across the deck — pick different fitting concepts, don't stamp the same one on every slide.
 
 ## textPosition (where the words sit)
 - One of exactly: "top", "center", "bottom".
@@ -135,11 +139,20 @@ type RawSlide = { text: string; visual?: string; textPosition?: SlideTextPositio
 async function attemptGenerate(
   idea: string,
   format: SlideFormat,
+  libraryVocabulary: string,
 ): Promise<GeneratedSlideshowText> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-  const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\n${FORMAT_DIRECTIVES[format]}`;
+  // The live library inventory is injected here, not baked into
+  // BASE_SYSTEM_PROMPT, because it changes as the bucket fills. If it's empty
+  // (library not populated yet) the model still writes a sensible concept and
+  // downstream retrieval just falls back to whatever exists / no image.
+  const librarySection = libraryVocabulary
+    ? `## image library (choose every "visual" from these concepts)\n${libraryVocabulary}`
+    : `## image library\n(no concepts available yet — still pick a short, concrete "visual" phrase)`;
+
+  const systemPrompt = `${BASE_SYSTEM_PROMPT}\n\n${librarySection}\n\n${FORMAT_DIRECTIVES[format]}`;
 
   let res: Response;
   try {
@@ -226,9 +239,10 @@ async function attemptGenerate(
 export async function generateSlideshowText(
   idea: string,
   format: SlideFormat = "STORYTIME",
+  libraryVocabulary = "",
 ): Promise<GeneratedSlideshowText> {
   try {
-    return await attemptGenerate(idea, format);
+    return await attemptGenerate(idea, format, libraryVocabulary);
   } catch (err) {
     // One retry, not a loop: this is on the free, unauthenticated
     // /api/generate path, so a stuck upstream shouldn't turn into several
@@ -237,7 +251,7 @@ export async function generateSlideshowText(
     // outage or auth failure will just fail the same way again and surface
     // to the caller as before.
     console.error("[openrouter] first attempt failed, retrying once", err);
-    return await attemptGenerate(idea, format);
+    return await attemptGenerate(idea, format, libraryVocabulary);
   }
 }
 

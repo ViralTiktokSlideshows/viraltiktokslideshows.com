@@ -596,15 +596,13 @@ app.post("/api/checkout/create", async (c) => {
     return c.json({ error: "Could not start checkout" }, 502);
   }
 
-  // Now that this request exclusively owns the row, it's safe (and the
-  // only request that will) to spend Ideogram credits on whichever slides
-  // were text-only during the free preview.
+  // Now that this request exclusively owns the row, resolve real R2 library
+  // images for whichever slides were text-only during the free preview. This
+  // costs nothing (our own bucket) and is the same for every buyer — there's no
+  // Ideogram/Pexels spend to gate behind plan-vs-$2 anymore.
   let enrichedSlides = slides;
   try {
-    // Plan subscribers get Ideogram AI images; a $2 one-off unlock gets free
-    // Pexels stock photos (Ideogram only as a last-resort fallback). See
-    // fillRemainingSlideImages.
-    enrichedSlides = await fillRemainingSlideImages(slides, { plan: isPlanCovered });
+    enrichedSlides = await fillRemainingSlideImages(slides);
   } catch (error) {
     console.error("Failed to fill remaining slide images, continuing with what we have", error);
   }
