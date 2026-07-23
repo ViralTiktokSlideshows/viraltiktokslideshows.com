@@ -45,6 +45,70 @@ export const posts: BlogPost[] = [
       "best number of slides tiktok",
     ],
   },
+  {
+    slug: "best-hashtags-for-tiktok-slideshows",
+    title: "The Best Hashtags for TikTok Slideshows",
+    seoTitle: "Best Hashtags for TikTok Slideshows (What 125 Viral Posts Used)",
+    description:
+      "I checked the hashtags under 125 viral TikTok slideshows. The million-view posts all used the same 3-part formula, not 30 random tags. Here's the exact combo, by niche.",
+    excerpt:
+      "The biggest TikTok slideshows weren't doing anything clever with hashtags — they ran the same 3-part combo over and over. Here's the exact formula.",
+    datePublished: "2026-07-20",
+    dateModified: "2026-07-20",
+    readingTimeMinutes: 4,
+    tag: "Playbook",
+    keywords: [
+      "best hashtags for tiktok slideshows",
+      "tiktok slideshow hashtags",
+      "how many hashtags on tiktok",
+      "tiktok hashtags for views",
+      "viral tiktok hashtags",
+      "gymtok hashtags",
+      "booktok hashtags",
+    ],
+  },
+  {
+    slug: "tiktok-slideshow-first-slide-hook",
+    title: "Why Your First Slide Is the Only One That Matters",
+    seoTitle: "TikTok Slideshow Hook: Why Your First Slide Decides Everything",
+    description:
+      "A 100-post breakdown of viral TikTok slideshows found almost the entire gap between 50K views and 5M views came down to slide 1. Here's what winning hooks do differently.",
+    excerpt:
+      "I went through 100 viral slideshows expecting the difference to be spread across the whole deck. It wasn't — it was almost entirely slide 1.",
+    datePublished: "2026-07-21",
+    dateModified: "2026-07-21",
+    readingTimeMinutes: 4,
+    tag: "Playbook",
+    keywords: [
+      "tiktok slideshow hook",
+      "tiktok slideshow first slide",
+      "tiktok slideshow cover",
+      "how to hook viewers on tiktok",
+      "tiktok slideshow ideas",
+      "viral tiktok hook examples",
+    ],
+  },
+  {
+    slug: "why-tiktok-videos-stuck-at-200-views",
+    title: "Why Your TikTok Videos Are Stuck at 200 Views",
+    seoTitle: "Why Your TikTok Videos Aren't Getting More Than 200 Views (Fix It)",
+    description:
+      "The 200-view wall on TikTok usually isn't a shadowban — it's a signals problem. Here are the 5 real reasons your videos stall, and what to fix first.",
+    excerpt:
+      "Used to think content quality mattered most. Turns out it's mostly the first two seconds — and 4 other signals TikTok checks before it shows you to more people.",
+    datePublished: "2026-07-22",
+    dateModified: "2026-07-22",
+    readingTimeMinutes: 5,
+    tag: "Growth",
+    keywords: [
+      "tiktok stuck at 200 views",
+      "why is my tiktok not getting views",
+      "tiktok shadowban",
+      "tiktok algorithm 2026",
+      "tiktok not getting views fix",
+      "tiktok views plateau",
+    ],
+  },
 ];
 
 export function getPost(slug: string): BlogPost | undefined {

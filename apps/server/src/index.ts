@@ -541,8 +541,17 @@ app.post("/api/checkout/create", async (c) => {
   // Computed *before* claiming the Purchase row below since it decides what
   // shape that row gets created in (PAID + includedInPlan, vs a normal
   // pending-for-Dodo-checkout row).
+  //
+  // Admin accounts (ADMIN_EMAILS, see lib/admin.ts) get unlimited free
+  // generation the same way — every purchase is treated as plan-covered
+  // regardless of actual plan/usage, so there's no quota and no Dodo
+  // checkout for this email ever. Reusing isAdminEmail rather than adding a
+  // separate allowlist: it's already scoped to exactly the intended
+  // account(s) via ADMIN_EMAILS, so this needs no new env var or schema
+  // change.
   const planUsage = await getPlanUsage(user);
-  const isPlanCovered = Boolean(planUsage && planUsage.used < planUsage.cap);
+  const isPlanCovered =
+    isAdminEmail(user.email) || Boolean(planUsage && planUsage.used < planUsage.cap);
 
   // Claim the idempotencyKey via the Purchase row's unique constraint
   // *before* spending anything on Ideogram, not after. This used to run the

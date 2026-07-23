@@ -77,7 +77,83 @@ const FAQS: Record<string, { q: string; a: string }[]> = {
       a: "Not inherently. A 2-slide slideshow can do tens of millions of views if the first slide hooks. Length only helps when the format calls for it (a list where the value IS the list). Adding slides for the sake of length hurts more than it helps.",
     },
   ],
+  "best-hashtags-for-tiktok-slideshows": [
+    {
+      q: "What are the best hashtags for TikTok slideshows?",
+      a: "The best-performing formula is 3 to 5 hashtags: one niche community tag ending in \"-tok\" (like #gymtok or #booktok), one specific topic tag, and #fyp. Across 125 viral slideshows, the exact combo #motivation #selfimprovement #fyp appeared under multiple posts with 20–40 million views.",
+    },
+    {
+      q: "How many hashtags should you use on TikTok?",
+      a: "3 to 5. Posts over 1 million views almost never used more than 5 hashtags. Stacking 20–30 hyper-niche tags was a pattern seen almost exclusively on low-performing posts, not viral ones.",
+    },
+    {
+      q: "Do 'tok' hashtags like #booktok or #gymtok actually help?",
+      a: "Yes — the community \"-tok\" tag was the single most consistent tag across viral posts in every niche checked (GymTok, BookTok, StudyTok). It places your post into an active, engaged community feed instead of a generic, oversaturated pool.",
+    },
+    {
+      q: "Should you still use #fyp on TikTok?",
+      a: "Its presence alone won't make a post go viral, but its absence was noticeably more common on underperforming posts than on hits. It costs nothing to include, so viral posts almost always had it.",
+    },
+  ],
+  "tiktok-slideshow-first-slide-hook": [
+    {
+      q: "Why does the first slide matter so much on TikTok slideshows?",
+      a: "Slide 1 is the cover shown in the feed and gets the first one to two seconds of attention. If it doesn't hook, viewers swipe away, retention craters, and TikTok's algorithm stops showing the post to new people — slides 2 onward never even get seen by most of the audience.",
+    },
+    {
+      q: "What makes a good TikTok slideshow hook?",
+      a: "A curiosity gap or a command, never a description or a label. Winning hooks in the data were short (7 words or fewer), written in second person, and made the viewer need to see slide 2 — rather than telling them what the post was about upfront.",
+    },
+    {
+      q: "What's an example of a bad TikTok slideshow first slide?",
+      a: "Labels that describe the content instead of hooking it — things like \"active studying methods\" or \"some books I've read.\" These read like a table of contents. In the data, a study post with a label-style first slide got 56K views, while a nearly identical post on the same topic with a hook-style first slide got 11 million.",
+    },
+  ],
+  "why-tiktok-videos-stuck-at-200-views": [
+    {
+      q: "Why is my TikTok stuck at 200 views?",
+      a: "The 200-view wall almost always means TikTok showed your video to a small initial test batch and the engagement signals were too weak to push it further — it's rarely an actual shadowban. The most common cause is viewers swiping away in the first 1-2 seconds.",
+    },
+    {
+      q: "Is the TikTok 200 views thing a shadowban?",
+      a: "Usually not. In the large majority of cases it's a signals problem: weak retention in the first couple seconds, and not enough saves, shares, or comments to tell the algorithm to expand distribution — not an account-level penalty.",
+    },
+    {
+      q: "How do you fix a TikTok stuck at low views?",
+      a: "Put your hook in the first 1-2 seconds as on-screen text so it lands even on mute, build content people actually save (not just watch), post more often since reach is partly a numbers game, and upload clean — no watermark, fresh audio, and hashtags that aren't dead or banned.",
+    },
+    {
+      q: "Do TikTok photo slideshows get more views than videos?",
+      a: "Slideshows can outperform video for creators who struggle to break 200 views because they hit the same signals more reliably: the hook is on-screen text that works on mute, high save rates are common (one slideshow example did 39M views and 1.1M saves), and they're far cheaper to produce, so you can post more often.",
+    },
+  ],
 };
+
+// Every post links to the others via slug — a small, flat cluster. Shown at
+// the bottom of each article so crawlers (and readers) hop between related
+// pages instead of dead-ending, which is most of what "topical clustering"
+// means in practice for a blog this size.
+function RelatedPosts({ exclude }: { exclude: string }) {
+  const others = getAllPosts().filter((post) => post.slug !== exclude);
+  if (others.length === 0) return null;
+  return (
+    <div className="mt-14 border-t border-border pt-8">
+      <h2 className="font-display text-lg font-bold text-foreground">Related reading</h2>
+      <ul className="mt-4 flex flex-col gap-3">
+        {others.map((post) => (
+          <li key={post.slug}>
+            <Link
+              href={`/blog/${post.slug}`}
+              className="text-sm font-medium text-riot hover:underline"
+            >
+              {post.title} →
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 const CONTENT: Record<string, ReactNode> = {
   "how-many-slides-should-a-tiktok-slideshow-have": (
@@ -255,6 +331,308 @@ const CONTENT: Record<string, ReactNode> = {
       </div>
     </>
   ),
+  "best-hashtags-for-tiktok-slideshows": (
+    <>
+      <p className={P}>
+        I pulled the hashtags on every TikTok slideshow I&apos;d collected that broke a million
+        views — 125 posts total — expecting chaos. Thirty tags, no pattern, everyone doing their
+        own thing. Instead it was almost always the same three-part structure.
+      </p>
+
+      <h2 className={H2}>The short answer</h2>
+      <p className={P}>
+        The best hashtags for a TikTok slideshow are{" "}
+        <strong className="font-semibold text-foreground">3 to 5 tags</strong> in this shape: one
+        community &ldquo;-tok&rdquo; tag for your niche (like #gymtok or #booktok), one specific
+        topic tag, and #fyp. That&apos;s it. Posts stacking 20–30 tags were almost never the
+        million-view ones.
+      </p>
+
+      <h2 className={H2}>It was never 30 tags</h2>
+      <p className={P}>
+        The 1M+ posts almost all ran 3 to 5 hashtags, and the shape was consistent: one community
+        &ldquo;-tok&rdquo; tag, one topic tag, plus #fyp. The decks stacking 20–30 tags were mostly
+        the small ones, not the hits.
+      </p>
+
+      <h2 className={H2}>One literal trio kept repeating</h2>
+      <p className={P}>
+        The single most-copied combo I saw was{" "}
+        <code className="rounded bg-muted px-1.5 py-0.5 text-sm">
+          #motivation #selfimprovement #fyp
+        </code>
+        . The exact same three tags sat under multiple posts in the 20–40M view range (one at
+        41.8M, one at 33.1M, one at 28.5M). Not a coincidence — it&apos;s a formula those accounts
+        run every time.
+      </p>
+
+      <h2 className={H2}>Every niche had its own version of the same shape</h2>
+      <div className="mt-6 overflow-hidden rounded-2xl border border-border">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-muted/50 text-foreground">
+            <tr>
+              <th className="px-4 py-3 font-semibold">Niche</th>
+              <th className="px-4 py-3 font-semibold">Hashtag combo</th>
+            </tr>
+          </thead>
+          <tbody className="text-foreground/80">
+            <tr className="border-t border-border">
+              <td className="px-4 py-3 font-medium">Gym</td>
+              <td className="px-4 py-3">#gymtok #gym #fyp</td>
+            </tr>
+            <tr className="border-t border-border">
+              <td className="px-4 py-3 font-medium">BookTok</td>
+              <td className="px-4 py-3">#booktok #bookrecs #fyp</td>
+            </tr>
+            <tr className="border-t border-border">
+              <td className="px-4 py-3 font-medium">Study</td>
+              <td className="px-4 py-3">#studytok #studytips #fyp</td>
+            </tr>
+            <tr className="border-t border-border">
+              <td className="px-4 py-3 font-medium">Motivation / self-improvement</td>
+              <td className="px-4 py-3">#motivation #selfimprovement #fyp</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 className={H2}>The &ldquo;-tok&rdquo; community tag mattered most</h2>
+      <p className={P}>
+        BookTok, GymTok, StudyTok — that tag drops your post into a real, active community feed
+        full of people who actually engage with that content, instead of a dead generic pool. It
+        was the single most consistent tag across the winners in every niche I checked.
+      </p>
+
+      <h2 className={H2}>#fyp was almost universal</h2>
+      <p className={P}>
+        It&apos;s not magic on its own, but its <em>absence</em> was way more common on the flops
+        than the hits. Same with #viral as an optional fourth tag on some posts.
+      </p>
+
+      <h2 className={H2}>What the small posts did wrong</h2>
+      <p className={P}>
+        Two failure modes showed up. Either they stacked 10–30 hyper-niche tags (#gymrat #gymbro
+        #cutting #bulking...), which traps the post in a tiny pool that&apos;s already seen
+        everything — or they went all-generic, which is infinite competition. The winners bridged
+        both: one community tag, one topic tag, one reach tag.
+      </p>
+
+      <h2 className={H2}>What to copy</h2>
+      <ul className="mt-4 list-disc space-y-2 pl-5">
+        <li className={LI}>3–5 hashtags, not 30.</li>
+        <li className={LI}>One &ldquo;-tok&rdquo; community tag for your niche.</li>
+        <li className={LI}>One specific topic tag.</li>
+        <li className={LI}>#fyp (and optionally #viral).</li>
+      </ul>
+      <p className={P}>
+        It&apos;s almost boring how consistent it was. The biggest slideshows weren&apos;t doing
+        anything clever with hashtags — they were running the same three-part combo over and over.
+        Steal the structure, swap in your niche.
+      </p>
+
+      <h2 className={H2}>Frequently asked questions</h2>
+      {FAQS["best-hashtags-for-tiktok-slideshows"]?.map((faq) => (
+        <div key={faq.q}>
+          <h3 className={H3}>{faq.q}</h3>
+          <p className={P}>{faq.a}</p>
+        </div>
+      ))}
+
+      <div className="mt-14 rounded-2xl bg-void p-6 text-center sm:p-8">
+        <h2 className="font-display text-xl font-bold text-bone sm:text-2xl">
+          Skip the guesswork on hooks, slides, and structure
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-bone/70">
+          viraltiktokslideshows builds the hook, slide count, and pacing from the same viral-post
+          patterns as this hashtag data. Preview it free, unlock for $2.
+        </p>
+        <Button size="lg" className="mt-6" nativeButton={false} render={<Link href="/generate" />}>
+          Generate a slideshow
+        </Button>
+      </div>
+    </>
+  ),
+  "tiktok-slideshow-first-slide-hook": (
+    <>
+      <p className={P}>
+        I went through roughly 100 viral TikTok slideshows expecting the difference-makers to be
+        spread across the whole deck — the images, the pacing, the closing line. They weren&apos;t.
+        Almost all of the gap between a 50K post and a 5M post came down to one slide.
+      </p>
+
+      <h2 className={H2}>The short answer</h2>
+      <p className={P}>
+        Slide 1 is the only slide most people ever see. It&apos;s the cover shown in the feed, and
+        it gets the first one to two seconds of attention. If it doesn&apos;t hook, viewers swipe,
+        retention craters, and TikTok stops showing the post to new people — slides 2 through 8
+        never even get loaded for most of the audience.
+      </p>
+
+      <h2 className={H2}>The winners&apos; first slide was a curiosity gap or a command</h2>
+      <p className={P}>
+        Real examples from the data: &ldquo;Damn…&rdquo; (11.8M views). &ldquo;thank me
+        later&rdquo; (39M). &ldquo;The only academic comeback checklist you&apos;ll ever
+        need&rdquo; (11M). &ldquo;put that phone down and start doing something.&rdquo; Short,
+        second person, and they make you <em>need</em> slide 2. None of them told you what the
+        post was — they made you curious or told you to do something.
+      </p>
+
+      <h2 className={H2}>The flops&apos; first slide was a label</h2>
+      <p className={P}>
+        It described the post instead of hooking it: &ldquo;active studying methods,&rdquo;
+        &ldquo;BIBLE MOTIVATION VERSES,&rdquo; &ldquo;some books I&apos;ve read.&rdquo; Accurate,
+        tidy, and dead on arrival. A study post whose first slide read like a promise did 11M. One
+        whose first slide read like a table of contents, on the exact same topic, did 56K. The gap
+        was the first slide.
+      </p>
+
+      <h2 className={H2}>What mattered less than expected</h2>
+      <p className={P}>
+        How polished slides 2 through 8 were. The exact images used. The caption. Those things help
+        retention <em>once someone is already swiping</em> — but none of them fire if slide 1
+        doesn&apos;t earn the swipe. People obsess over the body of a slideshow and neglect the one
+        slide that decides everything.
+      </p>
+
+      <h2 className={H2}>How to fix your first slide</h2>
+      <ul className="mt-4 list-disc space-y-2 pl-5">
+        <li className={LI}>Make it a curiosity gap or a command — never a description or a label.</li>
+        <li className={LI}>7 words or fewer. Second person, talking to one person.</li>
+        <li className={LI}>
+          If it tells the reader what the post is, rewrite it so they <em>need</em> to see the next
+          slide.
+        </li>
+        <li className={LI}>
+          Test it muted, with zero context: would a stranger scrolling actually stop?
+        </li>
+      </ul>
+      <p className={P}>
+        You can spend an hour perfecting the rest of a slideshow, but if slide 1 is a label, none
+        of it gets seen. Put your effort where the algorithm actually looks first — the opening
+        frame.
+      </p>
+
+      <h2 className={H2}>Frequently asked questions</h2>
+      {FAQS["tiktok-slideshow-first-slide-hook"]?.map((faq) => (
+        <div key={faq.q}>
+          <h3 className={H3}>{faq.q}</h3>
+          <p className={P}>{faq.a}</p>
+        </div>
+      ))}
+
+      <div className="mt-14 rounded-2xl bg-void p-6 text-center sm:p-8">
+        <h2 className="font-display text-xl font-bold text-bone sm:text-2xl">
+          Write a hook that actually stops the scroll
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-bone/70">
+          viraltiktokslideshows is built on hook rules like these — short, second-person, curiosity
+          or command, never a label. Preview it free, unlock for $2.
+        </p>
+        <Button size="lg" className="mt-6" nativeButton={false} render={<Link href="/generate" />}>
+          Generate a slideshow
+        </Button>
+      </div>
+    </>
+  ),
+  "why-tiktok-videos-stuck-at-200-views": (
+    <>
+      <p className={P}>
+        Used to think content quality mattered most. Turns out it&apos;s mostly the first two
+        seconds.
+      </p>
+      <p className={P}>
+        The &ldquo;200 view wall&rdquo; is real and it makes you feel shadowbanned, but 9 times out
+        of 10 it&apos;s not a ban and it&apos;s not your follower count. It&apos;s a signals
+        problem. TikTok shows every post to a small test batch first — a few hundred people — and
+        decides whether to push it based on how that batch reacts. If the signals are weak, you
+        stall at ~200. Here&apos;s what&apos;s actually killing it.
+      </p>
+
+      <h2 className={H2}>1. Your first 1–2 seconds don&apos;t hook</h2>
+      <p className={P}>
+        This is the biggest one. If people swipe in the first second, your retention craters and
+        TikTok reads that as &ldquo;nobody wants this&rdquo; and stops showing it. Most stuck
+        videos start with a slow intro, a &ldquo;hey guys,&rdquo; or context nobody asked for. The
+        test batch is gone before you get to the good part.
+      </p>
+
+      <h2 className={H2}>2. Nobody&apos;s saving, sharing, or commenting</h2>
+      <p className={P}>
+        Views alone don&apos;t move you. Saves, shares, and comments do — they&apos;re the signals
+        that tell the algorithm &ldquo;push this wider.&rdquo; A video can be fine to watch and
+        still get zero saves, and fine-but-forgettable is exactly what plateaus at 200. If your
+        content doesn&apos;t make someone save it or tag a friend, you&apos;ve capped yourself.
+      </p>
+
+      <h2 className={H2}>3. You&apos;re not posting enough</h2>
+      <p className={P}>
+        Reach is partly a lottery. Posting twice a week is two tickets. The accounts that break out
+        are usually taking way more swings — I found the same creator with a 34K post and a 3M
+        post, same niche, same hashtags. They didn&apos;t crack a code, they just posted enough to
+        catch a wave.
+      </p>
+
+      <h2 className={H2}>4. Small technical stuff is throttling you</h2>
+      <p className={P}>
+        Reused or dead sounds, a watermark from CapCut or another app, banned or dead hashtags,
+        editing entirely in-app. None of these are a &ldquo;ban,&rdquo; but they quietly suppress
+        reach. Upload clean, use fresh audio, and check your hashtags aren&apos;t dead.
+      </p>
+
+      <h2 className={H2}>5. You picked the hardest possible format</h2>
+      <p className={P}>
+        Video has to earn watch time second by second, against creators with better cameras,
+        editing, and lighting. You&apos;re competing on production you may not have.
+      </p>
+
+      <h2 className={H2}>What to actually change</h2>
+      <ul className="mt-4 list-disc space-y-2 pl-5">
+        <li className={LI}>
+          Put a hook in the first 1–2 seconds — as on-screen text, so it lands even on mute. No
+          intros.
+        </li>
+        <li className={LI}>
+          Build for the save, not the view. A tip, a list, something worth keeping. Saves break
+          plateaus faster than anything.
+        </li>
+        <li className={LI}>Post more. Treat each one as a ticket, not a masterpiece.</li>
+        <li className={LI}>Upload clean: no watermark, fresh sound, live hashtags.</li>
+        <li className={LI}>
+          If video keeps dying, try photo slideshows. They quietly hit every signal the algorithm
+          rewards — the big ones had insane save counts (one routine post did 39M views and 1.1M
+          saves), they rack up dwell time because people swipe back and re-read, and they work on
+          mute because the hook is just text on slide 1. They&apos;re also far cheaper to make, so
+          you can post the volume that actually breaks you out.
+        </li>
+      </ul>
+      <p className={P}>
+        200 views usually isn&apos;t a ban and it isn&apos;t your followers. It&apos;s a signals
+        problem — weak hook, nothing worth saving, not enough shots. Fix those, or switch to a
+        format that racks up those signals for basically free.
+      </p>
+
+      <h2 className={H2}>Frequently asked questions</h2>
+      {FAQS["why-tiktok-videos-stuck-at-200-views"]?.map((faq) => (
+        <div key={faq.q}>
+          <h3 className={H3}>{faq.q}</h3>
+          <p className={P}>{faq.a}</p>
+        </div>
+      ))}
+
+      <div className="mt-14 rounded-2xl bg-void p-6 text-center sm:p-8">
+        <h2 className="font-display text-xl font-bold text-bone sm:text-2xl">
+          Try the format that hits every signal
+        </h2>
+        <p className="mx-auto mt-2 max-w-md text-sm text-bone/70">
+          viraltiktokslideshows turns any idea into a save-worthy slideshow with a hook built for
+          the first two seconds. Preview it free, unlock for $2.
+        </p>
+        <Button size="lg" className="mt-6" nativeButton={false} render={<Link href="/generate" />}>
+          Generate a slideshow
+        </Button>
+      </div>
+    </>
+  ),
 };
 
 export default async function BlogPostPage({
@@ -357,7 +735,9 @@ export default async function BlogPostPage({
         <div className="mt-8">{body}</div>
       </article>
 
-      <div className="mt-14 border-t border-border pt-8">
+      <RelatedPosts exclude={slug} />
+
+      <div className="mt-8 border-t border-border pt-8">
         <Link href="/blog" className="text-sm text-riot hover:underline">
           ← Back to all posts
         </Link>
